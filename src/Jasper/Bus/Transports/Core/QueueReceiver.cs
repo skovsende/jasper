@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Tasks.Dataflow;
@@ -43,12 +43,15 @@ namespace Jasper.Bus.Transports.Core
 
         public void Enqueue(Envelope message)
         {
+            // Calling Post and ignoring the return value is O.K. while the block has unbounded capacity.
+            // However, any messages passed after Dispose has been called will be silently dropped.
             _block.Post(message);
         }
 
         public void Dispose()
         {
             _block.Complete();
+            _block.Completion.Wait();
         }
     }
 

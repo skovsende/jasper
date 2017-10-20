@@ -255,6 +255,12 @@ namespace Jasper.LightningDb
             }
         }
 
+        public Task<bool> TryClaim(Envelope candidateEnvelope)
+        {
+            //Because LightningDBs are private to a single node, the current node can always pretend to hold the lock.
+            return Task.FromResult(true);
+        }
+
         public IList<Envelope> LoadAll(string name)
         {
             var list = new List<Envelope>();
@@ -285,6 +291,28 @@ namespace Jasper.LightningDb
 
                 tx.Commit();
             }
+        }
+
+        public async Task<IEnumerable<Envelope>> LoadInbox(string[] queueNames, CancellationToken cancellationToken)
+        {
+            var loadTasks = new Task<IEnumerable<Envelope>>[queueNames.Length];
+            for (int i = 0; i < queueNames.Length; i++)
+            {
+                var queueName = queueNames[i];
+                loadTasks[i] = Task.Run(() =>
+                {
+                    var list = new List<Envelope>();
+                    ReadAll(queueName, e => list.Add(e), cancellationToken);
+                    return (IEnumerable<Envelope>)list;
+                }, cancellationToken);
+            }
+            var result = Enumerable.Empty<Envelope>();
+            foreach (var loadTask in loadTasks)
+            {
+                var queueEnvelopes = await loadTask;
+                result = result.Concat(queueEnvelopes);
+            }
+            return result;
         }
 
         public void StoreInitial(Envelope[] messages)

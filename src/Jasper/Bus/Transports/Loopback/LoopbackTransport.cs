@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 using Jasper.Bus.Logging;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Runtime.Invocation;
@@ -14,15 +15,14 @@ using Jasper.Util;
 
 namespace Jasper.Bus.Transports.Loopback
 {
-    public class LoopbackTransport : ITransport, IQueueProvider
+    public class LoopbackTransport : ITransport
     {
         public static readonly string ProtocolName = "loopback";
 
         private readonly CancellationTokenSource _cancellation = new CancellationTokenSource();
         private readonly CompositeLogger _logger;
-        private Lazy<IChannel> _retryChannel;
 
-        private QueueCollection _queues;
+        private readonly Dictionary<string, LoopbackQueue> _processors = new Dictionary<string, LoopbackQueue>();
 
         public LoopbackTransport(CompositeLogger logger)
         {
@@ -43,40 +43,48 @@ namespace Jasper.Bus.Transports.Loopback
 
         public Task Send(Envelope envelope, Uri destination)
         {
-            _queues.Enqueue(destination, envelope);
-
-            return Task.CompletedTask;
+            var processor = _processors[destination.QueueName()];
+            return processor.Enqueue(envelope);
         }
 
-        public IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings, OutgoingChannels channels)
+        public IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings)
         {
             _settings = settings.Loopback;
-            _retryChannel = new Lazy<IChannel>(() => channels.DefaultRetryChannel);
             return startListeners(pipeline, settings).ToArray();
         }
 
         private IEnumerable<IChannel> startListeners(IHandlerPipeline pipeline, BusSettings settings)
         {
-            _queues = new QueueCollection(_logger, this, pipeline, _cancellation.Token );
-
             var senders = settings.KnownSubscribers.Where(x => x.Uri.Scheme == ProtocolName)
                 .ToDictionary(x => x.Uri);
 
             foreach (var queue in settings.Loopback)
             {
-                var receiver = _queues.AddQueue(queue.Name, queue.Parallelization);
-
+                if (!_processors.ContainsKey(queue.Name))
+                {
+                    _processors.Add(queue.Name, makeProcessor(queue, pipeline));
+                }
                 var uri = $"loopback://{queue.Name}".ToUri();
 
                 senders.TryGetValue(uri, out SubscriberAddress subscriber);
-                yield return new LoopbackChannel(subscriber ?? new SubscriberAddress(uri), receiver);
+                yield return new LoopbackChannel(subscriber ?? new SubscriberAddress(uri), this);
             }
 
-            foreach (var sender in senders.Values.Where(x => !_queues.Has(x.Uri.QueueName())))
+            foreach (var sender in senders.Values)
             {
-                var receiver = _queues.AddQueue(sender.Uri.QueueName(), 5);
-                yield return new LoopbackChannel(sender, receiver);
+                var queueName = sender.Uri.QueueName();
+                if (!_processors.ContainsKey(queueName))
+                {
+                    var queueSettings = new QueueSettings(queueName) { Parallelization = 5};
+                    _processors.Add(queueName, makeProcessor(queueSettings, pipeline));
+                }
+                yield return new LoopbackChannel(sender, this);
             }
+        }
+
+        private LoopbackQueue makeProcessor(QueueSettings queueSettings, IHandlerPipeline pipeline)
+        {
+            return new LoopbackQueue(queueSettings.Name, queueSettings.Parallelization, pipeline, _cancellation.Token);
         }
 
         public Uri DefaultReplyUri()
@@ -89,28 +97,49 @@ namespace Jasper.Bus.Transports.Loopback
         public void Dispose()
         {
             _cancellation.Cancel();
-            _queues?.Dispose();
+            foreach (var block in _processors.Values)
+            {
+                block.Dispose();
+            }
         }
 
         public static readonly Uri Delayed = "loopback://delayed".ToUri();
         public static readonly Uri Retries = "loopback://retries".ToUri();
         private TransportSettings _settings;
 
-        IMessageCallback IQueueProvider.BuildCallback(Envelope envelope, QueueReceiver receiver)
-        {
-            return new LightweightCallback(_retryChannel.Value);
-        }
-
-        void IQueueProvider.StoreIncomingMessages(Envelope[] messages)
-        {
-            // nothing
-        }
-
-        void IQueueProvider.RemoveIncomingMessages(Envelope[] messages)
-        {
-            // nothing
-        }
     }
 
+    public class LoopbackQueue : IQueueReader, IDisposable
+    {
+        private readonly BufferBlock<Envelope> _buffer = new BufferBlock<Envelope>();
+        private readonly QueueReceiver _receiver;
 
+        public LoopbackQueue(string queueName, int maximumParallelization, IHandlerPipeline pipeline, CancellationToken cancellationToken)
+        {
+            _receiver = new QueueReceiver(queueName, maximumParallelization, pipeline, this, cancellationToken);
+            _receiver.Start();
+        }
+
+        public Task<Envelope> PeekLock(CancellationToken cancellationToken)
+        {
+            return _buffer.ReceiveAsync(cancellationToken);
+        }
+
+        public Task Receive(Envelope envelope, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
+
+        public void Dispose()
+        {
+            _receiver.Dispose();
+        }
+
+        public Task Enqueue(Envelope envelope)
+        {
+            throw new NotImplementedException("Need to figure out how to build the proper callback for the loopback transport");
+            envelope.Callback = new LightweightCallback(null);
+            return _buffer.SendAsync(envelope);
+        }
+    }
 }

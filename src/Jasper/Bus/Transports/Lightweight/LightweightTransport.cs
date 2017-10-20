@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -23,13 +23,6 @@ namespace Jasper.Bus.Transports.Lightweight
         public LightweightTransport(CompositeLogger logger, BusSettings settings)
             : base(ProtocolName, new NulloPersistence(), logger, new SocketSenderProtocol(), settings)
         {
-
-
-        }
-
-        protected override IQueueProvider buildQueueProvider(OutgoingChannels channels)
-        {
-            return new LightweightQueueProvider(() => channels[TransportConstants.RetryUri]);
         }
     }
 }

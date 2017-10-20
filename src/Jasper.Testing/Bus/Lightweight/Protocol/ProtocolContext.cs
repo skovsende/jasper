@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -89,12 +89,12 @@ namespace Jasper.Testing.Bus.Lightweight.Protocol
     }
 
 
-    public class StubReceiverCallback : IReceiverCallback
+    public class StubReceiverCallback : ITcpReceiverCallback
     {
         public ReceivedStatus StatusToReturn;
         public bool ThrowErrorOnReceived;
 
-        ReceivedStatus IReceiverCallback.Received(Uri uri, Envelope[] messages)
+        Task<ReceivedStatus> ITcpReceiverCallback.Received(Uri uri, Envelope[] messages)
         {
             if (ThrowErrorOnReceived)
             {
@@ -103,25 +103,25 @@ namespace Jasper.Testing.Bus.Lightweight.Protocol
 
             MessagesReceived = messages;
 
-            return StatusToReturn;
+            return Task.FromResult(StatusToReturn);
 
         }
 
         public Envelope[] MessagesReceived { get; set; }
 
-        void IReceiverCallback.Acknowledged(Envelope[] messages)
+        void ITcpReceiverCallback.Acknowledged(Envelope[] messages)
         {
             WasAcknowledged = true;
         }
 
         public bool? WasAcknowledged { get; set; }
 
-        void IReceiverCallback.NotAcknowledged(Envelope[] messages)
+        void ITcpReceiverCallback.NotAcknowledged(Envelope[] messages)
         {
             WasAcknowledged = false;
         }
 
-        void IReceiverCallback.Failed(Exception exception, Envelope[] messages)
+        void ITcpReceiverCallback.Failed(Exception exception, Envelope[] messages)
         {
             FailureException = exception;
         }

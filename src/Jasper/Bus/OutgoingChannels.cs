@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -55,7 +55,7 @@ namespace Jasper.Bus
 
             foreach (var transport in transports)
             {
-                var channels = transport.Start(pipeline, settings, this);
+                var channels = transport.Start(pipeline, settings);
                 foreach (var channel in channels)
                 {
                     _channels[channel.Uri] = channel;

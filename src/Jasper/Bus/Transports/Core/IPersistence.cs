@@ -1,25 +1,37 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 
 namespace Jasper.Bus.Transports.Core
 {
-    public interface IPersistence
+    //TODO: make these interfaces async
+    public interface IPersistence : IInboxPersistence, IOutboxPersistence
     {
         void Remove(string queueName, IEnumerable<Envelope> envelopes);
+        void Remove(Envelope[] messages);
+
+        void ClearAllStoredMessages(string queuePath = null);
+        Task<bool> TryClaim(Envelope candidateEnvelope);
+    }
+
+    public interface IInboxPersistence
+    {
+        void Initialize(string[] queueNames);
+        Task<IEnumerable<Envelope>> LoadInbox(string[] queueNames, CancellationToken cancellationToken);
+        void StoreInitial(Envelope[] messages);
         void Remove(string queueName, Envelope envelope);
         void Replace(string queueName, Envelope envelope);
-        void StoreInitial(Envelope[] messages);
-        void Remove(Envelope[] messages);
+    }
+
+    public interface IOutboxPersistence
+    {
         void RemoveOutgoing(IList<Envelope> outgoingMessages);
         void PersistBasedOnSentAttempts(OutgoingMessageBatch batch, int maxAttempts);
-        void Initialize(string[] queueNames);
         void StoreOutgoing(Envelope envelope);
-        void ClearAllStoredMessages(string queuePath = null);
-
         void RecoverOutgoingMessages(Action<Envelope> action, CancellationToken cancellation);
-        void RecoverPersistedMessages(string[] queueNames, Action<Envelope> action, CancellationToken cancellation);
     }
 
     public class NulloPersistence : IPersistence
@@ -36,8 +48,9 @@ namespace Jasper.Bus.Transports.Core
         {
         }
 
-        public void ReadAll(string name, Action<Envelope> callback)
+        public Task<IEnumerable<Envelope>> LoadInbox(string[] queueNames, CancellationToken cancellationToken)
         {
+            return Task.FromResult(Enumerable.Empty<Envelope>());
         }
 
         public void StoreInitial(Envelope[] messages)
@@ -60,10 +73,6 @@ namespace Jasper.Bus.Transports.Core
         {
         }
 
-        public void ReadOutgoing(Action<Envelope> callback)
-        {
-        }
-
         public void StoreOutgoing(Envelope envelope)
         {
         }
@@ -73,12 +82,12 @@ namespace Jasper.Bus.Transports.Core
 
         }
 
-        public void RecoverOutgoingMessages(Action<Envelope> action, CancellationToken cancellation)
+        public Task<bool> TryClaim(Envelope candidateEnvelope)
         {
-
+            return Task.FromResult(true);
         }
 
-        public void RecoverPersistedMessages(string[] queueNames, Action<Envelope> action, CancellationToken cancellation)
+        public void RecoverOutgoingMessages(Action<Envelope> action, CancellationToken cancellation)
         {
 
         }

@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -26,7 +25,6 @@ namespace Jasper.Bus.Transports.Core
         private readonly SendingAgent _sender;
         private Uri _replyUri;
         private ListeningAgent _listener;
-        private QueueCollection _queues;
 
         protected TransportBase(string protocol, IPersistence persistence, CompositeLogger logger, ISenderProtocol sendingProtocol, BusSettings settings)
         {
@@ -44,9 +42,9 @@ namespace Jasper.Bus.Transports.Core
             _sender?.Dispose();
 
             _listener?.Dispose();
-
-            _queues?.Dispose();
+            //TODO: wait for the receivers to stop.
         }
+
 
         private void processRetry(OutgoingMessageBatch outgoing)
         {
@@ -112,7 +110,6 @@ namespace Jasper.Bus.Transports.Core
             processRetry(outgoing);
         }
 
-
         public Task Send(Envelope envelope, Uri destination)
         {
             if ((envelope.ReplyRequested.IsNotEmpty() || envelope.AckRequested) && _listener == null)
@@ -126,12 +123,12 @@ namespace Jasper.Bus.Transports.Core
             }
 
             envelope.Destination = destination;
-            enqueue(envelope);
+            enqueueOutgoing(envelope);
 
             return Task.CompletedTask;
         }
 
-        private void enqueue(Envelope envelope)
+        private void enqueueOutgoing(Envelope envelope)
         {
             envelope.ReplyUri = _replyUri;
 
@@ -140,11 +137,11 @@ namespace Jasper.Bus.Transports.Core
             _sender.Enqueue(envelope);
         }
 
-
         public Uri DefaultReplyUri()
         {
             return _replyUri;
         }
+
 
         public TransportState State => _settings.State;
         public void Describe(TextWriter writer)
@@ -155,27 +152,49 @@ namespace Jasper.Bus.Transports.Core
             }
         }
 
-        public IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings, OutgoingChannels channels)
+
+        public IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings)
         {
             if (_settings.State == TransportState.Disabled) return new IChannel[0];
 
+            startHandlingIncoming(pipeline, settings);
 
+            return startHandlingOutgoing(settings);
+        }
 
-
-            var provider = buildQueueProvider(channels);
-
+        private IChannel[] startHandlingOutgoing(BusSettings settings)
+        {
             _sender.Start(this);
 
-            _queues = new QueueCollection(Logger, provider, pipeline, _cancellation.Token);
+            Persistence.RecoverOutgoingMessages(enqueueOutgoing, _cancellation.Token);
 
+            return settings.KnownSubscribers.Where(x => x.Uri.Scheme == Protocol)
+                .Select(x => new Channel(x, this)).OfType<IChannel>().ToArray();
+        }
+
+        private void startHandlingIncoming(IHandlerPipeline pipeline, BusSettings settings)
+        {
             var queueNames = _settings.AllQueueNames();
-
             Persistence.Initialize(queueNames);
 
-            foreach (var queue in _settings)
+            var queues = new TcpQueues(Persistence, Logger, _cancellation.Token);
+
+            // make sure the default queue is included
+            var queuesToHandle = _settings.Concat(new[]
             {
-                _queues.AddQueue(queue.Name, queue.Parallelization);
+                new QueueSettings(TransportConstants.Default) {Parallelization = 5}
+            });
+            foreach (var queue in queuesToHandle)
+            {
+                queues.EnsureQueue(queue.Name, queueReader =>
+                {
+                    var receiver = new QueueReceiver(queue.Name, queue.Parallelization, pipeline, queueReader, _cancellation.Token);
+                    receiver.Start();
+                    //TODO: hold on to the receivers so we can wait for them to complete when we're done.
+                });
             }
+
+            queues.RecoverPersistedMessages(_cancellation.Token);
 
             if (_settings.Port.HasValue)
             {
@@ -183,18 +202,10 @@ namespace Jasper.Bus.Transports.Core
                     .ToUri();
 
 
-                _listener = new ListeningAgent(_queues, _settings.Port.Value, Protocol, _cancellation.Token);
+                _listener = new ListeningAgent(queues, _settings.Port.Value, Protocol, _cancellation.Token);
                 _listener.Start();
             }
-
-            Persistence.RecoverOutgoingMessages(enqueue, _cancellation.Token);
-            Persistence.RecoverPersistedMessages(queueNames, env => _queues.Enqueue(env.Queue, env), _cancellation.Token);
-
-            return settings.KnownSubscribers.Where(x => x.Uri.Scheme == Protocol)
-                .Select(x => new Channel(x, this)).OfType<IChannel>().ToArray();
         }
-
-        protected abstract IQueueProvider buildQueueProvider(OutgoingChannels channels);
 
     }
 }

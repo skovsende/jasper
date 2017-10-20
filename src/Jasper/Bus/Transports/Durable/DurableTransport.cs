@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -20,11 +20,6 @@ namespace Jasper.Bus.Transports.Durable
             : base(ProtocolName, persistence, logger, new SocketSenderProtocol(), settings)
         {
 
-        }
-
-        protected override IQueueProvider buildQueueProvider(OutgoingChannels channels)
-        {
-            return new DurableQueueProvider(Persistence);
         }
     }
 }

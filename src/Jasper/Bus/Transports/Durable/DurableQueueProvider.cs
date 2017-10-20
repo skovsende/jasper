@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Transports.Core;
@@ -14,14 +14,14 @@ namespace Jasper.Bus.Transports.Durable
             _persistence = persistence;
         }
 
-        public IMessageCallback BuildCallback(Envelope envelope, QueueReceiver receiver)
-        {
-            return new DurableCallback(receiver.QueueName, envelope, _persistence, receiver.Enqueue);
-        }
+//        public IMessageCallback BuildCallback(Envelope envelope, QueueReceiver receiver)
+//        {
+//            return new DurableCallback(receiver.QueueName, envelope, _persistence, receiver.Enqueue);
+//        }
 
-        public void StoreIncomingMessages(Envelope[] messages)
+        public Task StoreIncomingMessages(Envelope[] messages)
         {
-            _persistence.StoreInitial(messages);
+            return Task.Run(() => _persistence.StoreInitial(messages));
         }
 
         public void RemoveIncomingMessages(Envelope[] messages)

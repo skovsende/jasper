@@ -379,7 +379,7 @@ namespace StorytellerSpecs.Fixtures
 
 
 
-        public IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings, OutgoingChannels channels)
+        public IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings)
         {
             _pipeline = pipeline;
 

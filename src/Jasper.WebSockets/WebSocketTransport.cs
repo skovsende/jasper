@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
@@ -70,7 +70,7 @@ namespace Jasper.WebSockets
             return Task.WhenAll(tasks);
         }
 
-        public IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings, OutgoingChannels channels)
+        public IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings)
         {
             _pipeline = pipeline;
 
@@ -79,7 +79,7 @@ namespace Jasper.WebSockets
                 JsonSerialization.RegisterType(messageType.ToMessageAlias(), messageType);
             }
 
-            _retries = channels.DefaultRetryChannel;
+            //_retries = channels.DefaultRetryChannel;
 
             return new IChannel[]{new OutgoingWebSocketChannel(this)};
         }

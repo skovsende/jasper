@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -77,13 +77,13 @@ namespace Jasper.Testing.Bus.Lightweight
         }
     }
 
-    public class RecordingReceiverCallback : IReceiverCallback
+    public class RecordingReceiverCallback : ITcpReceiverCallback
     {
         public readonly List<Envelope> ReceivedMessages = new List<Envelope>();
 
         public int ExpectCount { get; set; }
 
-        public ReceivedStatus Received(Uri uri, Envelope[] messages)
+        public Task<ReceivedStatus> Received(Uri uri, Envelope[] messages)
         {
             ReceivedMessages.AddRange(messages);
 
@@ -92,7 +92,7 @@ namespace Jasper.Testing.Bus.Lightweight
                 _expected.SetResult(true);
             }
 
-            return ReceivedStatus.Successful;
+            return Task.FromResult(ReceivedStatus.Successful);
         }
 
         private readonly TaskCompletionSource<bool> _expected

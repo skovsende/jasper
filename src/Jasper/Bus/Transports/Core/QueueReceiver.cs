@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Threading.Tasks.Dataflow;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Runtime.Invocation;
 
@@ -10,48 +9,77 @@ namespace Jasper.Bus.Transports.Core
     public class QueueReceiver : IDisposable
     {
         private readonly IHandlerPipeline _pipeline;
-        private readonly IQueueProvider _provider;
+        private readonly int _maximumParallelization;
+        private readonly IQueueReader _queue;
         private readonly CancellationToken _cancellationToken;
-        private readonly ActionBlock<Envelope> _block;
+        private Task _receivingTask;
+
         public string QueueName { get; }
 
-        public QueueReceiver(IHandlerPipeline pipeline, string queueName, int maximumParallelization, IQueueProvider provider, CancellationToken cancellationToken)
+        public QueueReceiver(string queueName, int maximumParallelization, IHandlerPipeline pipeline, IQueueReader queueReader, CancellationToken cancellationToken)
         {
             _pipeline = pipeline;
-            _provider = provider;
+            _maximumParallelization = maximumParallelization;
+            _queue = queueReader;
             _cancellationToken = cancellationToken;
             QueueName = queueName;
+        }
 
-
-            var options = new ExecutionDataflowBlockOptions
+        private async Task receiveMessages()
+        {
+            var sem = new SemaphoreSlim(_maximumParallelization);
+            while (!_cancellationToken.IsCancellationRequested)
             {
-                MaxDegreeOfParallelism = maximumParallelization,
-                CancellationToken = cancellationToken
-            };
+                await sem.WaitAsync(_cancellationToken);
 
+#pragma warning disable 4014
+                Task.Run(async () =>
+#pragma warning restore 4014
+                {
+                    Envelope envelope;
+                    try
+                    {
+                        envelope = await _queue.PeekLock(_cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        sem.Release();
+                        return;
+                    }
 
-            _block = new ActionBlock<Envelope>(receive, options);
+                    await receive(envelope)
+                        //TODO: capture and report failure
+                        .ContinueWith((tsk, o) =>
+                        {
+                            sem.Release();
+                        }, null, TaskContinuationOptions.ExecuteSynchronously);
+                }, _cancellationToken);
+                //TODO: append a continuation that observes and reports faults including cancellation.
+            }
+            // now wait until the pending handler tasks complete
+            for (int i = 0; i < _maximumParallelization; i++)
+            {
+                // ReSharper disable once MethodSupportsCancellation
+                // We know cancellation has already been requested, now we're jwaiting for it to be acknowledged; we don't want these to fail
+                await sem.WaitAsync();
+            }
         }
 
         private Task receive(Envelope envelope)
         {
-            envelope.Callback = _provider.BuildCallback(envelope, this);
             envelope.ContentType = envelope.ContentType ?? "application/json";
 
             return _pipeline.Invoke(envelope);
         }
 
-        public void Enqueue(Envelope message)
-        {
-            // Calling Post and ignoring the return value is O.K. while the block has unbounded capacity.
-            // However, any messages passed after Dispose has been called will be silently dropped.
-            _block.Post(message);
-        }
-
         public void Dispose()
         {
-            _block.Complete();
-            _block.Completion.Wait();
+            _receivingTask.Wait();
+        }
+
+        public void Start()
+        {
+            _receivingTask = receiveMessages();
         }
     }
 

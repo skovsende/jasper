@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
@@ -21,9 +21,10 @@ namespace Jasper.Bus.Transports.Lightweight
             return new LightweightCallback(_retryChannel.Value);
         }
 
-        public void StoreIncomingMessages(Envelope[] messages)
+        public Task StoreIncomingMessages(Envelope[] messages)
         {
             // nothing
+            return Task.CompletedTask;
         }
 
         public void RemoveIncomingMessages(Envelope[] messages)

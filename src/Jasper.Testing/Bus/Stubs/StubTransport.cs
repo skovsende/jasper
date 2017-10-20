@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -50,7 +50,7 @@ namespace Jasper.Testing.Bus.Stubs
             return address;
         }
 
-        public IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings, OutgoingChannels channels)
+        public IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings)
         {
             return new IChannel[0];
         }

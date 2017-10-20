@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
@@ -13,7 +13,7 @@ namespace Jasper.Bus.Transports
 
         Task Send(Envelope envelope, Uri destination);
 
-        IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings, OutgoingChannels channels);
+        IChannel[] Start(IHandlerPipeline pipeline, BusSettings settings);
 
         Uri DefaultReplyUri();
 

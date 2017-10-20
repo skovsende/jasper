@@ -45,7 +45,7 @@ namespace Jasper.Bus.Transports.Core
         }
 
 
-        public static async Task Receive(Stream stream, IReceiverCallback callback, Uri uri)
+        public static async Task Receive(Stream stream, ITcpReceiverCallback callback, Uri uri)
         {
             Envelope[] messages = null;
 
@@ -78,9 +78,9 @@ namespace Jasper.Bus.Transports.Core
             }
         }
 
-        private static async Task receive(Stream stream, IReceiverCallback callback, Envelope[] messages, Uri uri)
+        private static async Task receive(Stream stream, ITcpReceiverCallback callback, Envelope[] messages, Uri uri)
         {
-            var status = callback.Received(uri, messages);
+            var status = await callback.Received(uri, messages);
             switch (status)
             {
                 case ReceivedStatus.ProcessFailure:

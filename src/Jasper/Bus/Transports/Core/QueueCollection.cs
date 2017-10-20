@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Jasper.Bus.Logging;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Runtime.Invocation;
@@ -10,7 +11,7 @@ using Jasper.Util;
 
 namespace Jasper.Bus.Transports.Core
 {
-    public class QueueCollection : IReceiverCallback, IDisposable
+    public class QueueCollection : ITcpReceiverCallback, IDisposable
     {
         private readonly IBusLogger _logger;
         private readonly IHandlerPipeline _pipeline;
@@ -33,10 +34,10 @@ namespace Jasper.Bus.Transports.Core
         {
             if (!_receivers.ContainsKey(queueName))
             {
-                var receiver = new QueueReceiver(_pipeline, queueName, parallelization, _provider, _cancellationToken);
-                _receivers.Add(queueName, receiver);
-
-                return receiver;
+//                var receiver = new QueueReceiver(_pipeline, queueName, parallelization, _provider, _cancellationToken);
+//                _receivers.Add(queueName, receiver);
+//
+//                return receiver;
             }
 
             return _receivers[queueName];
@@ -56,22 +57,22 @@ namespace Jasper.Bus.Transports.Core
         {
             if (_receivers.ContainsKey(queueName))
             {
-                _receivers[queueName].Enqueue(envelope);
+                //_receivers[queueName].Enqueue(envelope);
             }
             else
             {
-                _default.Enqueue(envelope);
+                //_default.Enqueue(envelope);
             }
         }
 
 
-        public ReceivedStatus Received(Uri uri, Envelope[] messages)
+        public async Task<ReceivedStatus> Received(Uri uri, Envelope[] messages)
         {
             // NOTE! We no longer validate against queues not existing.
             // instead, we just shuttle them to the default queue
             try
             {
-                _provider.StoreIncomingMessages(messages);
+                await _provider.StoreIncomingMessages(messages);
 
                 foreach (var message in messages)
                 {
@@ -95,6 +96,8 @@ namespace Jasper.Bus.Transports.Core
 
         public void NotAcknowledged(Envelope[] messages)
         {
+            //Question: what does it really mean if receipt of these messages
+            // is not acknowledged by the sender?
             _provider.RemoveIncomingMessages(messages);
         }
 
@@ -109,7 +112,6 @@ namespace Jasper.Bus.Transports.Core
             {
                 receiver.Dispose();
             }
-
             _receivers.Clear();
         }
 

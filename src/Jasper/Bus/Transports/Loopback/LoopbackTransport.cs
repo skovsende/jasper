@@ -21,12 +21,14 @@ namespace Jasper.Bus.Transports.Loopback
 
         private readonly CancellationTokenSource _cancellation = new CancellationTokenSource();
         private readonly CompositeLogger _logger;
+        private readonly IChannelGraph _channels;
 
         private readonly Dictionary<string, LoopbackQueue> _processors = new Dictionary<string, LoopbackQueue>();
 
-        public LoopbackTransport(CompositeLogger logger)
+        public LoopbackTransport(CompositeLogger logger, IChannelGraph channels)
         {
             _logger = logger;
+            _channels = channels;
         }
 
         public string Protocol => ProtocolName;
@@ -84,7 +86,7 @@ namespace Jasper.Bus.Transports.Loopback
 
         private LoopbackQueue makeProcessor(QueueSettings queueSettings, IHandlerPipeline pipeline)
         {
-            return new LoopbackQueue(queueSettings.Name, queueSettings.Parallelization, pipeline, _cancellation.Token);
+            return new LoopbackQueue(queueSettings.Name, queueSettings.Parallelization, pipeline, _channels, _cancellation.Token);
         }
 
         public Uri DefaultReplyUri()
@@ -111,11 +113,13 @@ namespace Jasper.Bus.Transports.Loopback
 
     public class LoopbackQueue : IQueueReader, IDisposable
     {
+        private readonly IChannelGraph _channels;
         private readonly BufferBlock<Envelope> _buffer = new BufferBlock<Envelope>();
         private readonly QueueReceiver _receiver;
 
-        public LoopbackQueue(string queueName, int maximumParallelization, IHandlerPipeline pipeline, CancellationToken cancellationToken)
+        public LoopbackQueue(string queueName, int maximumParallelization, IHandlerPipeline pipeline, IChannelGraph channels, CancellationToken cancellationToken)
         {
+            _channels = channels;
             _receiver = new QueueReceiver(queueName, maximumParallelization, pipeline, this, cancellationToken);
             _receiver.Start();
         }
@@ -137,8 +141,7 @@ namespace Jasper.Bus.Transports.Loopback
 
         public Task Enqueue(Envelope envelope)
         {
-            throw new NotImplementedException("Need to figure out how to build the proper callback for the loopback transport");
-            envelope.Callback = new LightweightCallback(null);
+            envelope.Callback = new LightweightCallback(_channels.DefaultRetryChannel);
             return _buffer.SendAsync(envelope);
         }
     }

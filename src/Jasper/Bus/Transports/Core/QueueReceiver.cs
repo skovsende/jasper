@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Jasper.Bus.Runtime;
 using Jasper.Bus.Runtime.Invocation;
 
 namespace Jasper.Bus.Transports.Core
@@ -13,8 +12,7 @@ namespace Jasper.Bus.Transports.Core
         private readonly IQueueReader _queue;
         private readonly CancellationToken _cancellationToken;
         private Task _receivingTask;
-
-        public string QueueName { get; }
+        private readonly SemaphoreSlim _parallelHandlingCapacity;
 
         public QueueReceiver(string queueName, int maximumParallelization, IHandlerPipeline pipeline, IQueueReader queueReader, CancellationToken cancellationToken)
         {
@@ -23,65 +21,66 @@ namespace Jasper.Bus.Transports.Core
             _queue = queueReader;
             _cancellationToken = cancellationToken;
             QueueName = queueName;
+            _parallelHandlingCapacity = new SemaphoreSlim(maximumParallelization);
         }
 
-        private async Task receiveMessages()
+        public string QueueName { get; }
+
+        public void Start()
         {
-            var sem = new SemaphoreSlim(_maximumParallelization);
-            while (!_cancellationToken.IsCancellationRequested)
-            {
-                await sem.WaitAsync(_cancellationToken);
-
-#pragma warning disable 4014
-                Task.Run(async () =>
-#pragma warning restore 4014
-                {
-                    Envelope envelope;
-                    try
-                    {
-                        envelope = await _queue.PeekLock(_cancellationToken);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        sem.Release();
-                        return;
-                    }
-
-                    await receive(envelope)
-                        //TODO: capture and report failure
-                        .ContinueWith((tsk, o) =>
-                        {
-                            sem.Release();
-                        }, null, TaskContinuationOptions.ExecuteSynchronously);
-                }, _cancellationToken);
-                //TODO: append a continuation that observes and reports faults including cancellation.
-            }
-            // now wait until the pending handler tasks complete
-            for (int i = 0; i < _maximumParallelization; i++)
-            {
-                // ReSharper disable once MethodSupportsCancellation
-                // We know cancellation has already been requested, now we're jwaiting for it to be acknowledged; we don't want these to fail
-                await sem.WaitAsync();
-            }
-        }
-
-        private Task receive(Envelope envelope)
-        {
-            envelope.ContentType = envelope.ContentType ?? "application/json";
-
-            return _pipeline.Invoke(envelope);
+            //TODO: probably this Start method should be made idempotent.
+            _receivingTask = receiveMessages();
         }
 
         public void Dispose()
         {
+            // We want the following to actually wait even after cancellation
+            // has been requested, so we're not passing the cancellation
+            // token to it.
+            // ReSharper disable once MethodSupportsCancellation
             _receivingTask.Wait();
         }
 
-        public void Start()
+        private async Task receiveMessages()
         {
-            _receivingTask = receiveMessages();
+            // this will cause at most _maximumParallelization simultaneous tasks to be waiting for the PeekLock task to complete.
+            while (!_cancellationToken.IsCancellationRequested)
+            {
+                await _parallelHandlingCapacity.WaitAsync(_cancellationToken).ConfigureAwait(false);
+
+#pragma warning disable 4014
+                Task.Run(
+                        async () =>
+                        {
+                            var envelope = await _queue.PeekLock(_cancellationToken).ConfigureAwait(false);
+
+                            envelope.ContentType = envelope.ContentType ?? "application/json";
+                            await _pipeline.Invoke(envelope).ConfigureAwait(false);
+                        },
+                        _cancellationToken
+                    )
+                    .ContinueWith(
+                        (tsk, o) =>
+                        {
+                            _parallelHandlingCapacity.Release();
+                            //TODO: observe and report faults. We can ignore cancellation.
+                        },
+                        state: null,
+                        continuationOptions: TaskContinuationOptions.ExecuteSynchronously
+                    );
+#pragma warning restore 4014
+            }
+
+            // now wait until all the handler tasks complete
+            for (int i = 0; i < _maximumParallelization; i++)
+            {
+                // We know cancellation has already been requested, now we're
+                // waiting for it to be acknowledged; we don't pass the
+                // cancellation token here because we want it to actually wait
+                // instead of immediately throwing OperationCancelledException.
+                // ReSharper disable once MethodSupportsCancellation
+                await _parallelHandlingCapacity.WaitAsync().ConfigureAwait(false);
+            }
         }
     }
-
-
 }

@@ -82,6 +82,9 @@ namespace Jasper.Testing.Bus.Lightweight
 
             await theSender.Bus.Send(theAddress, new Message2());
 
+            waiter.Wait(20.Seconds());
+            if (!waiter.IsCompleted)
+                throw new TimeoutException();
             var env = await waiter;
 
             env.Message.ShouldBeOfType<Message2>();
@@ -104,6 +107,9 @@ namespace Jasper.Testing.Bus.Lightweight
 
             await theSender.Bus.Send(theAddress, new Message2());
 
+            waiter.Wait(20.Seconds());
+            if(!waiter.IsCompleted)
+                throw new TimeoutException();
             var env = await waiter;
 
             env.Source.ShouldBe(theSender.Get<BusSettings>().NodeId);

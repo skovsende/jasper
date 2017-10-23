@@ -152,7 +152,11 @@ namespace Jasper.Bus.Transports.Core
 
         public Task Requeue(Envelope originalEnvelope, Envelope newEnvelope)
         {
-            return Task.Run(() => _persistence.Replace(originalEnvelope.Queue, newEnvelope));
+            return Task.Run(() =>
+            {
+                _persistence.Replace(originalEnvelope.Queue, newEnvelope);
+                _buffer.Post(newEnvelope);
+            });
         }
     }
 }

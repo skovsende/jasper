@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Baseline;
 using Jasper.Bus.Delayed;
@@ -144,14 +143,7 @@ namespace Jasper.Bus.Runtime.Invocation
         {
             try
             {
-                if (envelope.Callback != null && envelope.Callback.SupportsSend)
-                {
-                    return _sender.Send(envelope, envelope.Callback);
-                }
-                else
-                {
-                    return _sender.Send(envelope);
-                }
+                return _sender.Send(envelope);
             }
             catch (Exception e)
             {

@@ -11,9 +11,8 @@ namespace Jasper.Bus.Transports.Core
         private readonly TcpQueue _tcpQueue;
         private readonly CancellationToken _cancellationToken;
 
-        public TcpQueueMessageCallback(string protocol, Envelope envelope, TcpQueue tcpQueue, CancellationToken cancellationToken)
+        public TcpQueueMessageCallback(Envelope envelope, TcpQueue tcpQueue, CancellationToken cancellationToken)
         {
-            TransportScheme = protocol;
             _envelope = envelope;
             _tcpQueue = tcpQueue;
             _cancellationToken = cancellationToken;
@@ -40,15 +39,5 @@ namespace Jasper.Bus.Transports.Core
         {
             return _tcpQueue.Requeue(_envelope, envelope);
         }
-
-        // TODO -- let's make this smart enough to be able to transfer
-        public Task Send(Envelope envelope)
-        {
-            throw new NotSupportedException();
-        }
-
-        public bool SupportsSend { get; } = false;
-
-        public string TransportScheme { get; }
     }
 }

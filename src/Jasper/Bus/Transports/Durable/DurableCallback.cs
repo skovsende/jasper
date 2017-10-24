@@ -45,14 +45,5 @@ namespace Jasper.Bus.Transports.Durable
 
             return Task.CompletedTask;
         }
-
-        // TODO -- let's make this smart enough to be able to transfer
-        public Task Send(Envelope envelope)
-        {
-            throw new NotSupportedException();
-        }
-
-        public bool SupportsSend { get; } = false;
-        public string TransportScheme { get; } = "durable";
     }
 }

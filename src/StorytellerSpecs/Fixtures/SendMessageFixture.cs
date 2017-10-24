@@ -518,17 +518,5 @@ namespace StorytellerSpecs.Fixtures
 
             return _channel.Send(envelope);
         }
-
-        public Task Send(Envelope envelope)
-        {
-            Sent.Add(envelope);
-            return Task.CompletedTask;
-        }
-
-        public bool SupportsSend { get; } = false;
-        public string TransportScheme { get; } = "stub";
     }
-
-
-
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Jasper.Bus;
 using Jasper.Bus.Runtime;
@@ -34,13 +34,5 @@ namespace Jasper.WebSockets
         {
             return _retries.Send(envelope);
         }
-
-        public Task Send(Envelope envelope)
-        {
-            throw new NotSupportedException();
-        }
-
-        public bool SupportsSend { get; } = false;
-        public string TransportScheme { get; } = "ws";
     }
 }

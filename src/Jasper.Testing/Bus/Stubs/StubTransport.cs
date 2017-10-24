@@ -141,15 +141,6 @@ namespace Jasper.Testing.Bus.Stubs
         }
 
         public bool Requeued { get; set; }
-
-        public Task Send(Envelope envelope)
-        {
-            Sent.Add(envelope);
-            return Task.CompletedTask;
-        }
-
-        public bool SupportsSend { get; } = true;
-        public string TransportScheme { get; }
     }
 
     public class Receiver

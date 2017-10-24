@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Runtime.Invocation;
@@ -29,15 +29,7 @@ namespace Jasper.Bus.Transports.Lightweight
             // TODO -- need a general way to log errors against an ITransport
             return Task.CompletedTask;
         }
-
-        public Task Send(Envelope envelope)
-        {
-            // nothing
-            return Task.CompletedTask;
-        }
-
-        public bool SupportsSend { get; } = false;
-        public string TransportScheme => "retries";
+        
 
         public Task Requeue(Envelope envelope)
         {

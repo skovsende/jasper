@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -37,12 +37,7 @@ namespace Jasper.Bus.Runtime
 
         public IBusLogger Logger { get;}
 
-        public Task<string> Send(Envelope envelope)
-        {
-            return Send(envelope, null);
-        }
-
-        public async Task<string> Send(Envelope envelope, IMessageCallback callback)
+        public async Task<string> Send(Envelope envelope)
         {
             if (envelope.Message == null) throw new ArgumentNullException(nameof(envelope.Message));
 
@@ -63,13 +58,13 @@ namespace Jasper.Bus.Runtime
 
                 foreach (var route in routes)
                 {
-                    await sendEnvelope(envelope, route, callback);
+                    await sendEnvelope(envelope, route);
                 }
             }
             else
             {
                 var route = await _router.RouteForDestination(envelope);
-                await sendEnvelope(envelope, route, callback);
+                await sendEnvelope(envelope, route);
             }
 
             return envelope.CorrelationId;
@@ -87,7 +82,7 @@ namespace Jasper.Bus.Runtime
             return Send(envelope);
         }
 
-        private async Task<Envelope> sendEnvelope(Envelope envelope, MessageRoute route, IMessageCallback callback)
+        private async Task<Envelope> sendEnvelope(Envelope envelope, MessageRoute route)
         {
             if (route == null) throw new ArgumentNullException(nameof(route));
 
@@ -100,11 +95,11 @@ namespace Jasper.Bus.Runtime
 
                 if (channel != null)
                 {
-                    await sendToStaticChannel(callback, sending, channel);
+                    await sendToStaticChannel(sending, channel);
                 }
                 else
                 {
-                    await sendToDynamicChannel(route.Destination, callback, sending, transport);
+                    await sendToDynamicChannel(route.Destination, sending, transport);
                 }
 
                 Logger.Sent(sending);
@@ -117,34 +112,20 @@ namespace Jasper.Bus.Runtime
             }
         }
 
-        private static async Task sendToDynamicChannel(Uri address, IMessageCallback callback, Envelope sending, ITransport transport)
+        private static async Task sendToDynamicChannel(Uri address, Envelope sending, ITransport transport)
         {
             sending.Destination = address;
             sending.ReplyUri = transport.DefaultReplyUri();
 
-            if (callback == null || !callback.SupportsSend && callback.TransportScheme == sending.Destination.Scheme)
-            {
-                await transport.Send(sending, sending.Destination).ConfigureAwait(false);
-            }
-            else
-            {
-                await callback.Send(sending).ConfigureAwait(false);
-            }
+            await transport.Send(sending, sending.Destination).ConfigureAwait(false);
         }
 
-        private static async Task sendToStaticChannel(IMessageCallback callback, Envelope sending, IChannel channel)
+        private static async Task sendToStaticChannel(Envelope sending, IChannel channel)
         {
             sending.Destination = channel.Destination;
             sending.ReplyUri = channel.ReplyUri;
 
-            if (callback == null || !callback.SupportsSend && callback.TransportScheme == sending.Destination.Scheme)
-            {
-                await channel.Send(sending).ConfigureAwait(false);
-            }
-            else
-            {
-                await callback.Send(sending).ConfigureAwait(false);
-            }
+            await channel.Send(sending).ConfigureAwait(false);
         }
 
     }

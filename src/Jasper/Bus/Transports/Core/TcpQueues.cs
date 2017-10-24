@@ -35,7 +35,7 @@ namespace Jasper.Bus.Transports.Core
 
         private IMessageCallback messageCallbackCreator(TcpQueue queue, Envelope envelope)
         {
-            return new TcpQueueMessageCallback("", envelope, queue, _cancellationToken);
+            return new TcpQueueMessageCallback(envelope, queue, _cancellationToken);
         }
 
         public void RecoverPersistedMessages(CancellationToken cancellationToken)

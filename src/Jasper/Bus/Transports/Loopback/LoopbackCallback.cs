@@ -1,15 +1,15 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Runtime.Invocation;
 
-namespace Jasper.Bus.Transports.Lightweight
+namespace Jasper.Bus.Transports.Loopback
 {
-    public class LightweightCallback : IMessageCallback
+    public class LoopbackCallback : IMessageCallback
     {
         private readonly IChannel _retries;
 
-        public LightweightCallback(IChannel retries)
+        public LoopbackCallback(IChannel retries)
         {
             _retries = retries ?? throw new ArgumentNullException(nameof(retries));
         }

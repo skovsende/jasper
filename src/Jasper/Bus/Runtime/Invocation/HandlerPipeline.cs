@@ -104,7 +104,7 @@ namespace Jasper.Bus.Runtime.Invocation
             var envelope = new Envelope
             {
                 Message = message,
-                Callback = new LightweightCallback(_channels.DefaultRetryChannel)
+                Callback = new LoopbackCallback(_channels.DefaultRetryChannel)
             };
 
             return InvokeNow(envelope);

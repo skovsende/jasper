@@ -141,7 +141,7 @@ namespace Jasper.Bus.Transports.Loopback
 
         public Task Enqueue(Envelope envelope)
         {
-            envelope.Callback = new LightweightCallback(_channels.DefaultRetryChannel);
+            envelope.Callback = new LoopbackCallback(_channels.DefaultRetryChannel);
             return _buffer.SendAsync(envelope);
         }
     }

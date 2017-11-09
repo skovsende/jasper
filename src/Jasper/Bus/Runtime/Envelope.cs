@@ -219,6 +219,8 @@ namespace Jasper.Bus.Runtime
             set => _executionTime = value?.ToUniversalTime();
         }
 
+        public EnvelopePosition Position { get; set; } = EnvelopePosition.Unknown;
+
         public bool IsDelayed(DateTime utcNow)
         {
             return ExecutionTime.HasValue && ExecutionTime.Value > utcNow;
@@ -236,4 +238,12 @@ namespace Jasper.Bus.Runtime
         }
     }
 
+    public enum EnvelopePosition
+    {
+        Incoming,
+        Outgoing,
+        Scheduled,
+        Unknown,
+        StagedForOutgoing
+    }
 }

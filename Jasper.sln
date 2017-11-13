@@ -67,7 +67,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Ponger", "src\Ponger\Ponger
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LightningDb", "LightningDb", "{6E13AC22-9BB2-4164-AB14-C5087F07C8E1}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "benchmarks", "src\benchmarks\benchmarks.csproj", "{75E8302C-319C-4878-89EA-5D9EF1CFC91E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "benchmarks", "src\benchmarks\benchmarks.csproj", "{75E8302C-319C-4878-89EA-5D9EF1CFC91E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -381,16 +381,16 @@ Global
 		{7BF5E459-D6B6-45C5-8EFB-6CCCB9467ADC}.Release|x86.Build.0 = Release|Any CPU
 		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Debug|x64.ActiveCfg = Debug|x64
-		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Debug|x64.Build.0 = Debug|x64
-		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Debug|x86.ActiveCfg = Debug|x86
-		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Debug|x86.Build.0 = Debug|x86
+		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Debug|x64.Build.0 = Debug|Any CPU
+		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Debug|x86.Build.0 = Debug|Any CPU
 		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Release|x64.ActiveCfg = Release|x64
-		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Release|x64.Build.0 = Release|x64
-		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Release|x86.ActiveCfg = Release|x86
-		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Release|x86.Build.0 = Release|x86
+		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Release|x64.ActiveCfg = Release|Any CPU
+		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Release|x64.Build.0 = Release|Any CPU
+		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Release|x86.ActiveCfg = Release|Any CPU
+		{75E8302C-319C-4878-89EA-5D9EF1CFC91E}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

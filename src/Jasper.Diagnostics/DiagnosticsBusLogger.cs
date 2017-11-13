@@ -9,9 +9,9 @@ namespace Jasper.Diagnostics
 {
     public class DiagnosticsBusLogger : IBusLogger
     {
-        private readonly IWebSocketSender _client;
+        private readonly Lazy<IWebSocketSender> _client;
 
-        public DiagnosticsBusLogger(IWebSocketSender client)
+        public DiagnosticsBusLogger(Lazy<IWebSocketSender> client)
         {
             _client = client;
         }
@@ -30,12 +30,12 @@ namespace Jasper.Diagnostics
 
         public void MessageFailed(Envelope envelope, Exception ex)
         {
-            _client.Send(new MessageFailed(envelope, ex));
+            _client.Value.Send(new MessageFailed(envelope, ex));
         }
 
         public void MessageSucceeded(Envelope envelope)
         {
-            _client.Send(new MessageSucceeded(envelope));
+            _client.Value.Send(new MessageSucceeded(envelope));
         }
 
         public void NoHandlerFor(Envelope envelope)
@@ -62,7 +62,7 @@ namespace Jasper.Diagnostics
 
         public void Sent(Envelope envelope)
         {
-            _client.Send(new MessageSent(envelope));
+            _client.Value.Send(new MessageSent(envelope));
         }
     }
 }

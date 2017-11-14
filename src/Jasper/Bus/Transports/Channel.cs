@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Transports.Configuration;
@@ -31,6 +31,11 @@ namespace Jasper.Bus.Transports
         public bool ShouldSendMessage(Type messageType)
         {
             return _address.ShouldSendMessage(messageType);
+        }
+
+        public void EnqueueFromOutbox(Envelope envelope)
+        {
+            _agent.EnqueueOutgoing(envelope).GetAwaiter().GetResult();
         }
 
         public Task Send(Envelope envelope)

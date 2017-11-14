@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 
@@ -13,7 +13,7 @@ namespace Jasper.Bus
 
         // Rename this to FullSend?
         Task Send(Envelope envelope);
-
+        void EnqueueFromOutbox(Envelope envelope);
 
         /// <summary>
         /// Bypasses serialization, modifiers, and persistence. Mostly used

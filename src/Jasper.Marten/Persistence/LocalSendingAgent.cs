@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
@@ -41,7 +41,7 @@ namespace Jasper.Marten.Persistence
         {
             using (var session = _store.LightweightSession())
             {
-                session.Store(envelope);
+                session.Store(new StoredEnvelope(envelope, "outgoing"));
                 await session.SaveChangesAsync();
             }
 

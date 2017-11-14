@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Jasper.Bus.Logging;
@@ -99,7 +99,10 @@ namespace Jasper.Marten.Persistence
         {
             using (var session = _store.LightweightSession())
             {
-                session.Delete(messages);
+                foreach (var envelope in messages)
+                {
+                    session.Delete(envelope);
+                }
                 await session.SaveChangesAsync();
             }
         }

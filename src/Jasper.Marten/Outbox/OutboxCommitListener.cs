@@ -18,8 +18,8 @@ namespace Jasper.Marten.Outbox
     {
         private readonly IChannelGraph _channels;
 
-        private readonly ConcurrentDictionary<IDocumentSession, HashSet<Envelope>> _envelopesToWatchFor
-            = new ConcurrentDictionary<IDocumentSession, HashSet<Envelope>>();
+        private readonly ConcurrentDictionary<IDocumentSession, HashSet<StoredEnvelope>> _envelopesToWatchFor
+            = new ConcurrentDictionary<IDocumentSession, HashSet<StoredEnvelope>>();
 
         public OutboxCommitListener(IChannelGraph channels)
         {
@@ -45,11 +45,11 @@ namespace Jasper.Marten.Outbox
             {
                 foreach (var insertedObject in commit.Updated)
                 {
-                    if (insertedObject is Envelope envelope)
+                    if (insertedObject is StoredEnvelope envelope)
                     {
                         if (envelopes.Contains(envelope))
                         {
-                            _channels.GetOrBuildChannel(envelope.Destination).EnqueueFromOutbox(envelope);
+                            _channels.GetOrBuildChannel(envelope.Envelope.Destination).EnqueueFromOutbox(envelope.Envelope);
                         }
                     }
                 }
@@ -60,12 +60,12 @@ namespace Jasper.Marten.Outbox
         /// Informs the listener to enqueue the envelope for delivery after the
         /// given session is committed with the envelope inserted.
         /// </summary>
-        public void DeliverEnvelopeAfterCommit(IDocumentSession session, Envelope envelope)
+        public void DeliverEnvelopeAfterCommit(IDocumentSession session, StoredEnvelope envelope)
         {
             // Just in case somebody implements Envelope.Equals and
             // Envelope.GetHashCode or implements IEquatable, we actually don't
             // want to use them. We always want reference equality.
-            var list = _envelopesToWatchFor.GetOrAdd(session, s => new HashSet<Envelope>(ReferenceEqualityComparer.Default));
+            var list = _envelopesToWatchFor.GetOrAdd(session, s => new HashSet<StoredEnvelope>(ReferenceEqualityComparer.Default));
             // Note: we have one HashSet per IDocumentSession and expect any
             // given IDocumentSession instance to be used by only one thread
             // at a time, so we're not synchronizing access to the HashSet,

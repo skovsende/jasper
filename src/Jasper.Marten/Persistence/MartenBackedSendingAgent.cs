@@ -45,7 +45,7 @@ namespace Jasper.Marten
 
             using (var session = _store.LightweightSession())
             {
-                session.Store(envelope);
+                session.Store(new StoredEnvelope(envelope, "outgoing"));
                 await session.SaveChangesAsync(_cancellation);
             }
 
@@ -61,7 +61,7 @@ namespace Jasper.Marten
 
             using (var session = _store.LightweightSession())
             {
-                session.Store(envelopes.ToArray());
+                session.Store(envelopes.Select(e => new StoredEnvelope(e, "outgoing")) .ToArray());
                 await session.SaveChangesAsync(_cancellation);
             }
 
@@ -80,7 +80,10 @@ namespace Jasper.Marten
         {
             using (var session = _store.LightweightSession())
             {
-                session.Delete(outgoing.Messages);
+                foreach (var envelope in outgoing.Messages)
+                {
+                    session.Delete<StoredEnvelope>(envelope.Id);
+                }
                 session.SaveChanges();
             }
         }

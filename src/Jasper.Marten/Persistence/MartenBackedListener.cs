@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Jasper.Bus.Logging;
 using Jasper.Bus.Runtime;
@@ -33,7 +34,7 @@ namespace Jasper.Marten
                 // TODO -- need to filter on delayed messages here!
                 using (var session = _store.LightweightSession())
                 {
-                    session.Store(messages);
+                    session.Store(messages.Select(e => new StoredEnvelope(e, "incoming")));
                     await session.SaveChangesAsync();
                 }
 
@@ -66,7 +67,10 @@ namespace Jasper.Marten
         {
             using (var session = _store.LightweightSession())
             {
-                session.Delete(messages);
+                foreach (var envelope in messages)
+                {
+                    session.Delete<StoredEnvelope>(envelope.Id);
+                }
                 await session.SaveChangesAsync();
             }
         }

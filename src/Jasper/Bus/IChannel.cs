@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 
@@ -12,6 +12,7 @@ namespace Jasper.Bus
         bool ShouldSendMessage(Type messageType);
 
         Task Send(Envelope envelope);
+        void EnqueueFromOutbox(Envelope envelope);
     }
 
 }

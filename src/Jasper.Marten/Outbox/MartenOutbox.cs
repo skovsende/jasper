@@ -61,9 +61,8 @@ namespace Jasper.Marten.Outbox
                 outgoing.EnsureData();
                 // Tell the listener that after this session is committed it
                 // needs to tell the sending agent to enqueue the envelope.
-                var storedEnvelope = new StoredEnvelope(outgoing, "outgoing");
-                _listener.DeliverEnvelopeAfterCommit(DocumentSession, storedEnvelope);
-                DocumentSession.Store(storedEnvelope);
+                _listener.DeliverEnvelopeAfterCommit(DocumentSession, outgoing);
+                DocumentSession.Store(outgoing);
             }
         }
     }

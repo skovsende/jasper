@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 using Marten;
 
@@ -16,6 +17,12 @@ namespace Jasper.Marten
             customizeSending?.Invoke(envelope);
 
             session.Store(envelope);
+        }
+
+        // I think this would mostly be used by middleware
+        public static Task SendAllPersistedEnvelopes(this IEnvelopeSender sender, IDocumentSession session)
+        {
+            session.
         }
     }
 }

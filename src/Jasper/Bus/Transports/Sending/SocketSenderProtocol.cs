@@ -38,6 +38,11 @@ namespace Jasper.Bus.Transports.Sending
                         {
                             await callback.ProcessingFailure(batch, protocolTimeout.Exception);
                         }
+
+                        if (protocolTimeout.IsFaulted)
+                        {
+                            callback.ProcessingFailure(batch, protocolTimeout.Exception);
+                        }
                     }
                 }
                 else

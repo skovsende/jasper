@@ -31,16 +31,35 @@ namespace Jasper.Marten.Tests.Outbox
         private JasperRuntime theSender;
         private JasperRuntime theHandler;
 
+        private static int portCounter = 2222;
+
         public end_to_end_with_outbox()
         {
-            using (var store = DocumentStore.For(ConnectionSource.ConnectionString))
+            using (var store = DocumentStore.For(_ =>
+            {
+                _.Connection(ConnectionSource.ConnectionString);
+                _.DatabaseSchemaName = "warehouse";
+            }))
             {
                 store.Advanced.Clean.CompletelyRemoveAll();
             }
 
-            theSender = JasperRuntime.For(new OrdersApp());
+            using (var store = DocumentStore.For(_ =>
+            {
+                _.Connection(ConnectionSource.ConnectionString);
+                _.DatabaseSchemaName = "orders";
+            }))
+            {
+                store.Advanced.Clean.CompletelyRemoveAll();
+            }
+
+            var senderPort = portCounter;
+
+            theSender = JasperRuntime.For(new OrdersApp(senderPort));
             // can switch between a few different implementations of the warehouse handler.
-            theHandler = JasperRuntime.For(new WarehouseApp<WarehouseHandler1>());
+            theHandler = JasperRuntime.For(new WarehouseApp<WarehouseHandler1>(senderPort));
+
+            portCounter += 2;
         }
 
         public void Dispose()
@@ -50,7 +69,7 @@ namespace Jasper.Marten.Tests.Outbox
         }
 
         [Fact]
-        public async Task send_and_handle_end_to_end()
+        public async Task send_and_handle_end_to_end_1()
         {
             /* Option 1: Use an IDocumentSession that the MartenOutbox creates for itself*/
             {
@@ -78,9 +97,13 @@ namespace Jasper.Marten.Tests.Outbox
 
                 TestSynch.ProcessedItemOutOfStockEvent.WaitOne(5.Seconds())
                     .ShouldBe(true, "Waited too long for ItemOutOfStock event to be handled");
-                
-            }
 
+            }
+        }
+
+        [Fact]
+        public async Task send_and_handle_end_to_end_2()
+        {
             /* Option 2: Use an existing IDocumentSession */
             {
                 using (var session = theSender.Get<IDocumentStore>().OpenSession(new SessionOptions { IsolationLevel = IsolationLevel.Serializable}))
@@ -195,19 +218,22 @@ namespace Jasper.Marten.Tests.Outbox
 
     public class OrdersApp : JasperRegistry
     {
-        public OrdersApp()
+        public OrdersApp(int senderPort)
         {
+            var receiverPort = senderPort + 1;
             Include<MartenBackedPersistence>();
 
             // Whether or not our event is destined for a durable queue, it will be stored durably in the outbox because of the usage of an outbox when sending it.
-            Publish.Message<OrderPlaced>().To("tcp://localhost:2345/durable");
+            Publish.Message<OrderPlaced>().To($"tcp://localhost:{receiverPort}/durable");
 
-            Transports.LightweightListenerAt(5432);
+            Transports.DurableListenerAt(senderPort);
 
             Settings.Alter<StoreOptions>(_ =>
             {
                 _.Connection(ConnectionSource.ConnectionString);
+                _.DatabaseSchemaName = "orders";
             });
+
             Handlers.DisableConventionalDiscovery();
             Handlers.IncludeType<OrderStatusHandler>();
         }
@@ -242,19 +268,22 @@ namespace Jasper.Marten.Tests.Outbox
 
     public class WarehouseApp<THandler> : JasperRegistry
     {
-        public WarehouseApp()
+        public WarehouseApp(int senderPort)
         {
+            var receiverPort = senderPort + 1;
+
             Include<MartenBackedPersistence>();
+
+            //Note: whether or not our event is destined for a durable queue, it will be stored durably in the outbox because of the implementation of the handlers.
+            Publish.Message<ItemOutOfStock>().To($"tcp://localhost:{senderPort}/durable");
+
+            Transports.DurableListenerAt(receiverPort);
 
             Settings.Alter<StoreOptions>(_ =>
             {
                 _.Connection(ConnectionSource.ConnectionString);
+                _.DatabaseSchemaName = "warehouse";
             });
-
-            //Note: whether or not our event is destined for a durable queue, it will be stored durably in the outbox because of the implementation of the handlers.
-            Publish.Message<ItemOutOfStock>().To("tcp://localhost:5432/");
-
-            Transports.DurableListenerAt(2345);
 
             Handlers.DisableConventionalDiscovery();
             Handlers.IncludeType<THandler>();

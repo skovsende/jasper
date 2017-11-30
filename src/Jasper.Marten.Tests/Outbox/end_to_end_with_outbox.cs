@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Data;
 using System.Linq;
 using System.Threading;
@@ -28,8 +29,8 @@ namespace Jasper.Marten.Tests.Outbox
     /// </summary>
     public class end_to_end_with_outbox : IDisposable
     {
-        private JasperRuntime theSender;
-        private JasperRuntime theHandler;
+        private readonly JasperRuntime theSender;
+        private readonly JasperRuntime theHandler;
 
         private static int portCounter = 2222;
 
@@ -69,75 +70,70 @@ namespace Jasper.Marten.Tests.Outbox
         }
 
         [Fact]
+        /* Option 1: Use an IDocumentSession that the MartenOutbox creates for itself*/
         public async Task send_and_handle_end_to_end_1()
         {
-            /* Option 1: Use an IDocumentSession that the MartenOutbox creates for itself*/
+            // The outbox can just be injected as a scoped dependency i.e. into an MVC controller
+            var outbox = theSender.Get<MartenOutbox>();
+            var order = new Order {Id = Guid.NewGuid(), ItemName = "Hat"};
+            // we're accessing a document session that gets created
+            outbox.DocumentSession.Store(order);
+
+            var eventMessage = new OrderPlaced {Id = order.Id, ItemName = order.ItemName};
+            await outbox.Send(eventMessage);
+
+            //TODO: assert that at this point, the sending agent should _not_ have been told to deliver the message
+
+            // A successful call to SaveChanges or SaveChangesAsync will
+            // trigger the sending agent to start delivering the envelopes
+            // that were just saved in the outbox.
+            await outbox.DocumentSession.SaveChangesAsync();
+            //TODO: assert that at this point, the sending agent should have been told to deliver the message
+
+            TestSynch.ProcessedOrderPlacedEvent.WaitOne(5.Seconds())
+                .ShouldBe(true, "Waited too long for OrderPlaced event to be handled");
+            //TODO: at this point, the warehouse app's sending agent should _not_ have been told to deliver the message
+            TestSynch.WarehouseHandlerShouldContinueEvent.Set();
+
+            TestSynch.ProcessedItemOutOfStockEvent.WaitOne(5.Seconds())
+                .ShouldBe(true, "Waited too long for ItemOutOfStock event to be handled");
+        }
+
+        [Fact]
+        /* Option 2: Use an existing IDocumentSession */
+        public async Task send_and_handle_end_to_end_2()
+        {
+            using (var session = theSender.Get<IDocumentStore>()
+                .OpenSession(new SessionOptions {IsolationLevel = IsolationLevel.Serializable}))
             {
-                // The outbox can just be injected as a scoped dependency i.e. into an MVC controller
                 var outbox = theSender.Get<MartenOutbox>();
+
+                // Attach the outbox to the document session.
+                // Everything sent via this outbox will be durably stored in the given session and
+                // then delivered the next time the session's changes are saved.
+                outbox.Enlist(session);
+
                 var order = new Order {Id = Guid.NewGuid(), ItemName = "Hat"};
-                // we're accessing a document session that gets created
-                outbox.DocumentSession.Store(order);
+                session.Store(order);
 
                 var eventMessage = new OrderPlaced {Id = order.Id, ItemName = order.ItemName};
                 await outbox.Send(eventMessage);
 
-                //TODO: assert that at this point, the sending agent should _not_ have been told to deliver the message
+                //TODO: assert that at this point, there should not have been anything handed to the sending agent.
 
-                // A successful call to SaveChanges or SaveChangesAsync will
-                // trigger the sending agent to start delivering the envelopes
-                // that were just saved in the outbox.
-                await outbox.DocumentSession.SaveChangesAsync();
+                // Complete will: save the document session including the envelopes in the outbox,
+                // then trigger the sending agent to start delivering those envelopes.
+                await session.SaveChangesAsync();
                 //TODO: assert that at this point, the sending agent should have been told to deliver the message
-
-                TestSynch.ProcessedOrderPlacedEvent.WaitOne(5.Seconds())
-                    .ShouldBe(true, "Waited too long for OrderPlaced event to be handled");
-                //TODO: at this point, the warehouse app's sending agent should _not_ have been told to deliver the message
-                TestSynch.WarehouseHandlerShouldContinueEvent.Set();
-
-                TestSynch.ProcessedItemOutOfStockEvent.WaitOne(5.Seconds())
-                    .ShouldBe(true, "Waited too long for ItemOutOfStock event to be handled");
-
             }
-        }
 
-        [Fact]
-        public async Task send_and_handle_end_to_end_2()
-        {
-            /* Option 2: Use an existing IDocumentSession */
-            {
-                using (var session = theSender.Get<IDocumentStore>().OpenSession(new SessionOptions { IsolationLevel = IsolationLevel.Serializable}))
-                {
-                    var outbox = theSender.Get<MartenOutbox>();
+            TestSynch.ProcessedOrderPlacedEvent.WaitOne(5.Seconds())
+                .ShouldBe(true, "Waited too long for OrderPlaced event to be handled");
+            //TODO: at this point, the warehouse app's sending agent should _not_ have been told to deliver the message
+            TestSynch.WarehouseHandlerShouldContinueEvent.Set();
 
-                    // Attach the outbox to the document session.
-                    // Everything sent via this outbox will be durably stored in the given session and
-                    // then delivered the next time the session's changes are saved.
-                    outbox.Enlist(session);
-
-                    var order = new Order {Id = Guid.NewGuid(), ItemName = "Hat"};
-                    session.Store(order);
-
-                    var eventMessage = new OrderPlaced {Id = order.Id, ItemName = order.ItemName};
-                    await outbox.Send(eventMessage);
-
-                    //TODO: assert that at this point, there should not have been anything handed to the sending agent.
-
-                    // Complete will: save the document session including the envelopes in the outbox,
-                    // then trigger the sending agent to start delivering those envelopes.
-                    await session.SaveChangesAsync();
-                    //TODO: assert that at this point, the sending agent should have been told to deliver the message
-                }
-
-                TestSynch.ProcessedOrderPlacedEvent.WaitOne(5.Seconds())
-                    .ShouldBe(true, "Waited too long for OrderPlaced event to be handled");
-                //TODO: at this point, the warehouse app's sending agent should _not_ have been told to deliver the message
-                TestSynch.WarehouseHandlerShouldContinueEvent.Set();
-
-                TestSynch.ProcessedItemOutOfStockEvent.WaitOne(5.Seconds())
-                    .ShouldBe(true, "Waited too long for ItemOutOfStock event to be handled");
-                
-            }
+            TestSynch.ProcessedItemOutOfStockEvent.WaitOne(5.Seconds())
+                .ShouldBe(true, "Waited too long for ItemOutOfStock event to be handled");
         }
     }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Baseline;
 using Jasper.Http.Model;
 using Jasper.Http.Routing;

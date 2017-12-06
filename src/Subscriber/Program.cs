@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using Jasper;
+using Jasper.Bus.Transports.Configuration;
 using Jasper.CommandLine;
 using TestMessages;
 
@@ -19,20 +20,22 @@ namespace Subscriber
         {
             Subscribe.At("http://loadbalancer/messages");
             Subscribe.ToAllMessages();
+
+            Transports.LightweightListenerAt(22222);
         }
     }
 
 
-    public class NewUserHandler
+    public class UserHandler
     {
-        public void Handle(NewUser newGuy)
+        public void Handle(UserCreated newGuy)
         {
-
+            Console.Out.WriteLine($"User Created: {newGuy.UserId}");
         }
 
-        public void Handle(DeleteUser deleted)
+        public void Handle(UserDeleted deleted)
         {
-
+            Console.Out.WriteLine($"User Deleted: {deleted.UserId}");
         }
     }
 }

@@ -184,26 +184,26 @@ namespace DurabilitySpecs.Fixtures.Marten
         }
 
         [FormatAs("There should be {count} persisted, incoming messages in the receiver storage")]
-        public int PersistedIncomingCount()
+        public long PersistedIncomingCount()
         {
             using (var conn = _receiverStore.Tenancy.Default.CreateConnection())
             {
                 conn.Open();
 
-                return (int) conn.CreateCommand(
+                return (long) conn.CreateCommand(
                         $"select count(*) from receiver.{PostgresqlEnvelopeStorage.IncomingTableName}")
                     .ExecuteScalar();
             }
         }
 
         [FormatAs("There should be {count} persisted, outgoing messages in the sender storage")]
-        public int PersistedOutgoingCount()
+        public long PersistedOutgoingCount()
         {
-            using (var conn = _receiverStore.Tenancy.Default.CreateConnection())
+            using (var conn = _sendingStore.Tenancy.Default.CreateConnection())
             {
                 conn.Open();
 
-                return (int) conn.CreateCommand(
+                return (long) conn.CreateCommand(
                         $"select count(*) from sender.{PostgresqlEnvelopeStorage.OutgoingTableName}")
                     .ExecuteScalar();
             }

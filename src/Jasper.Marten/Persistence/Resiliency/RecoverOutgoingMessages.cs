@@ -36,7 +36,7 @@ namespace Jasper.Marten.Persistence.Resiliency
             _logger = logger;
 
             _findUniqueDestinations = $"select distinct destination from {_marker.Outgoing}";
-            _findOutgoingEnvelopesSql = $"select body from {marker.Outgoing} where owner_id = {TransportConstants.AnyNode} and destination = :destination take {settings.Retries.RecoveryBatchSize}";
+            _findOutgoingEnvelopesSql = $"select body from {marker.Outgoing} where owner_id = {TransportConstants.AnyNode} and destination = :destination limit {settings.Retries.RecoveryBatchSize}";
             _deleteOutgoingSql = $"delete from {marker.Outgoing} where owner_id = :owner and destination = :destination";
 
 
@@ -49,8 +49,11 @@ namespace Jasper.Marten.Persistence.Resiliency
             var cmd = session.Connection.CreateCommand(_findUniqueDestinations);
             using (var reader = await cmd.ExecuteReaderAsync())
             {
-                var text = await reader.GetFieldValueAsync<string>(0);
-                list.Add(text.ToUri());
+                while (await reader.ReadAsync())
+                {
+                    var text = await reader.GetFieldValueAsync<string>(0);
+                    list.Add(text.ToUri());
+                }
             }
 
             return list;

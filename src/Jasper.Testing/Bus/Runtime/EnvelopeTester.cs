@@ -60,9 +60,8 @@ namespace Jasper.Testing.Bus.Runtime
 
             envelope.DeliverBy.ShouldNotBeNull();
 
-            envelope.DeliverBy.Value.ShouldBeGreaterThan(DateTime.UtcNow.AddMinutes(5).AddSeconds(-5));
-            envelope.DeliverBy.Value.ShouldBeLessThan(DateTime.UtcNow.AddMinutes(5).AddSeconds(5));
-            envelope.DeliverBy.Value.Kind.ShouldBe(DateTimeKind.Utc);
+            envelope.DeliverBy.Value.ShouldBeGreaterThan(DateTimeOffset.UtcNow.AddMinutes(5).AddSeconds(-5));
+            envelope.DeliverBy.Value.ShouldBeLessThan(DateTimeOffset.UtcNow.AddMinutes(5).AddSeconds(5));
         }
 
         [Fact]

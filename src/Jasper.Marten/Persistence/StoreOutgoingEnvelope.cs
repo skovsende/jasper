@@ -33,11 +33,15 @@ namespace Jasper.Marten.Persistence
             var deliverBy =
                 builder.AddParameter(
                     Envelope.DeliverBy,
-                    NpgsqlDbType.Timestamp);
+                    NpgsqlDbType.TimestampTZ);
 
             var body = builder.AddParameter(bytes, NpgsqlDbType.Bytea);
 
-            var sql = $"insert into {_outgoingTable} (id, owner_id, destination, deliver_by, body) values ({id.ParameterName}, {owner.ParameterName}, {destination.ParameterName}, {deliverBy.ParameterName})";
+            var sql = $@"
+insert into {_outgoingTable}
+  (id, owner_id, destination, deliver_by, body)
+values
+  (:{id.ParameterName}, :{owner.ParameterName}, :{destination.ParameterName}, :{deliverBy.ParameterName}, :{body.ParameterName})";
             builder.Append(sql);
         }
 

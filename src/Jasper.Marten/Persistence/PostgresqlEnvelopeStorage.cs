@@ -23,5 +23,10 @@ namespace Jasper.Marten.Persistence
         }
 
         public override Type StorageType => typeof(Envelope);
+
+        public override bool IsActive(StoreOptions options)
+        {
+            return true;
+        }
     }
 }

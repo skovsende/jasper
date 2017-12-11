@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Transports;
@@ -28,16 +29,32 @@ namespace Jasper.Marten.Tests.Persistence
             theRuntime = JasperRuntime.For(_ =>
             {
                 _.MartenConnectionStringIs(ConnectionSource.ConnectionString);
+
+                _.ConfigureMarten(x =>
+                {
+                    x.Storage.Add<PostgresqlEnvelopeStorage>();
+                    x.PLV8Enabled = false;
+                });
             });
 
             theStore = theRuntime.Get<IDocumentStore>();
 
+            theStore.Advanced.Clean.CompletelyRemoveAll();
+            theStore.Schema.ApplyAllConfiguredChangesToDatabase();
+
             theEnvelope = ObjectMother.Envelope();
             theEnvelope.Status = TransportConstants.Incoming;
 
-            theStore.BulkInsert(new Envelope[]{theEnvelope});
+            var marker = new OwnershipMarker(new BusSettings(), new StoreOptions());
 
-            theCallback = new MartenCallback(theEnvelope, Substitute.For<IWorkerQueue>(), theStore, new OwnershipMarker(new BusSettings(), new StoreOptions()));
+            using (var session = theStore.OpenSession())
+            {
+                session.StoreIncoming(marker, theEnvelope);
+                session.SaveChanges();
+            }
+
+
+            theCallback = new MartenCallback(theEnvelope, Substitute.For<IWorkerQueue>(), theStore, marker);
         }
 
         public void Dispose()
@@ -52,7 +69,10 @@ namespace Jasper.Marten.Tests.Persistence
 
             using (var session = theStore.QuerySession())
             {
-                SpecificationExtensions.ShouldBeNull((await session.LoadAsync<Envelope>(theEnvelope.Id)));
+                var persisted = session.AllIncomingEnvelopes().FirstOrDefault(x => x.Id == theEnvelope.Id);
+
+
+                persisted.ShouldBeNull();
             }
 
 
@@ -65,7 +85,10 @@ namespace Jasper.Marten.Tests.Persistence
 
             using (var session = theStore.QuerySession())
             {
-                (await session.LoadAsync<Envelope>(theEnvelope.Id)).ShouldBeNull();
+                var persisted = session.AllIncomingEnvelopes().FirstOrDefault(x => x.Id == theEnvelope.Id);
+
+
+                persisted.ShouldBeNull();
 
 
                 var report = await session.LoadAsync<ErrorReport>(theEnvelope.Id);
@@ -81,7 +104,7 @@ namespace Jasper.Marten.Tests.Persistence
 
             using (var session = theStore.QuerySession())
             {
-                var persisted = await session.LoadAsync<Envelope>(theEnvelope.Id);
+                var persisted = session.AllIncomingEnvelopes().FirstOrDefault(x => x.Id == theEnvelope.Id);
 
                 persisted.Attempts.ShouldBe(1);
             }
@@ -96,7 +119,7 @@ namespace Jasper.Marten.Tests.Persistence
 
             using (var session = theStore.QuerySession())
             {
-                var persisted = await session.LoadAsync<Envelope>(theEnvelope.Id);
+                var persisted = session.AllIncomingEnvelopes().FirstOrDefault(x => x.Id == theEnvelope.Id);
                 persisted.Status.ShouldBe(TransportConstants.Scheduled);
                 persisted.OwnerId.ShouldBe(TransportConstants.AnyNode);
                 persisted.ExecutionTime.ShouldBe(time);

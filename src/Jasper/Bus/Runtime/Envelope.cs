@@ -116,8 +116,8 @@ namespace Jasper.Bus.Runtime
 
         private PersistedMessageId _id;
         private string _queue;
-        private DateTime? _deliverBy;
-        private DateTime? _executionTime;
+        private DateTimeOffset? _deliverBy;
+        private DateTimeOffset? _executionTime;
 
         public PersistedMessageId EnvelopeVersionId
         {
@@ -136,7 +136,7 @@ namespace Jasper.Bus.Runtime
         // This is purely for backwards compatibility in wire format
         private string SubQueue { get; set; } = string.Empty;
 
-        public DateTime? DeliverBy
+        public DateTimeOffset? DeliverBy
         {
             get => _deliverBy;
             set => _deliverBy = value?.ToUniversalTime();
@@ -230,7 +230,7 @@ namespace Jasper.Bus.Runtime
 
         public bool AckRequested { get; set; }
 
-        public DateTime? ExecutionTime
+        public DateTimeOffset? ExecutionTime
         {
             get => _executionTime;
             set => _executionTime = value?.ToUniversalTime();

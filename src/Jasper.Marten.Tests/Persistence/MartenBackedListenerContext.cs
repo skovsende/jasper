@@ -80,9 +80,13 @@ namespace Jasper.Marten.Tests.Persistence
             theStore = DocumentStore.For(_ =>
             {
                 _.Connection(ConnectionSource.ConnectionString);
+                _.PLV8Enabled = false;
+                _.Storage.Add<PostgresqlEnvelopeStorage>();
             });
 
             theStore.Advanced.Clean.CompletelyRemoveAll();
+
+            theStore.Schema.ApplyAllConfiguredChangesToDatabase();
 
             theWorkerQueue = Substitute.For<IWorkerQueue>();
 
@@ -150,7 +154,7 @@ namespace Jasper.Marten.Tests.Persistence
 
             using (var session = theStore.QuerySession())
             {
-                return await session.Query<Envelope>().ToListAsync();
+                return session.AllIncomingEnvelopes();
             }
         }
 

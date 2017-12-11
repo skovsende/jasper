@@ -17,8 +17,6 @@ namespace Jasper.Marten.Persistence.Resiliency
     // TODO -- use Marten operations instead of direct SQL calls here to batch up commands
     public class OwnershipMarker
     {
-
-        private readonly int _currentNodeId;
         private readonly string _markOwnedOutgoingSql;
         private readonly string _markOwnedIncomingSql;
 
@@ -41,7 +39,7 @@ namespace Jasper.Marten.Persistence.Resiliency
 
             _markOwnedIncomingSql = $"update {Incoming} set owner_id = :owner where id = ANY(:idlist)";
 
-            _currentNodeId = settings.UniqueNodeId;
+            CurrentNodeId = settings.UniqueNodeId;
 
 
 
@@ -53,6 +51,8 @@ namespace Jasper.Marten.Persistence.Resiliency
 
 
         }
+
+        public int CurrentNodeId { get; }
 
         public DbObjectName Incoming { get; }
 
@@ -69,7 +69,7 @@ namespace Jasper.Marten.Persistence.Resiliency
             return session.Connection.CreateCommand()
                 .Sql(_markOwnedIncomingSql)
                 .With("idlist", identities, NpgsqlDbType.Array | NpgsqlDbType.Uuid)
-                .With("owner", _currentNodeId, NpgsqlDbType.Integer)
+                .With("owner", CurrentNodeId, NpgsqlDbType.Integer)
                 .ExecuteNonQueryAsync();
         }
 
@@ -82,7 +82,7 @@ namespace Jasper.Marten.Persistence.Resiliency
                 .Sql(_markOwnedOutgoingSql)
                 .With("idlist", identities, NpgsqlDbType.Array | NpgsqlDbType.Uuid)
                 .With("status", TransportConstants.Outgoing, NpgsqlDbType.Varchar)
-                .With("owner", _currentNodeId, NpgsqlDbType.Integer)
+                .With("owner", CurrentNodeId, NpgsqlDbType.Integer)
                 .ExecuteNonQueryAsync();
         }
 

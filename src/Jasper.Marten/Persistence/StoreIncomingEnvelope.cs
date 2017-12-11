@@ -31,11 +31,15 @@ namespace Jasper.Marten.Persistence
             var executionTime =
                 builder.AddParameter(
                     Envelope.ExecutionTime,
-                    NpgsqlDbType.Timestamp);
+                    NpgsqlDbType.TimestampTZ);
 
             var body = builder.AddParameter(bytes, NpgsqlDbType.Bytea);
 
-            var sql = $"insert into {_incomingTable} (id, owner_id, status, execution_time, body) values ({id.ParameterName}, {owner.ParameterName}, {status.ParameterName}, {executionTime.ParameterName})";
+            var sql = $@"
+insert into {_incomingTable}
+  (id, owner_id, status, execution_time, body)
+values
+  (:{id.ParameterName}, :{owner.ParameterName}, :{status.ParameterName}, :{executionTime.ParameterName}, :{body.ParameterName})";
             builder.Append(sql);
         }
 

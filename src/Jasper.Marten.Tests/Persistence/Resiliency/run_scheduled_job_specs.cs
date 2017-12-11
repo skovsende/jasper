@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Jasper.Bus.Logging;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Transports;
+using Jasper.Marten.Persistence;
 using Jasper.Marten.Persistence.Resiliency;
 using Jasper.Marten.Tests.Setup;
 using Marten;
@@ -24,7 +25,7 @@ namespace Jasper.Marten.Tests.Persistence.Resiliency
             theScheduledJob = new RunScheduledJobs(theWorkerQueue, theStore, new OwnershipMarker(theSettings, new StoreOptions()), CompositeTransportLogger.Empty());
         }
 
-        protected async Task<IReadOnlyList<Envelope>> afterExecutingAt(DateTime time)
+        protected async Task<IReadOnlyList<Envelope>> afterExecutingAt(DateTimeOffset time)
         {
             var connection = theStore.Tenancy.Default.CreateConnection();
             await connection.OpenAsync();
@@ -76,7 +77,8 @@ namespace Jasper.Marten.Tests.Persistence.Resiliency
 
             using (var session = theStore.QuerySession())
             {
-                var persisted = await session.LoadAsync<Envelope>(env2.Id);
+                var persisted = session.AllIncomingEnvelopes().FirstOrDefault(x => x.Id == env2.Id);
+
                 persisted.Status.ShouldBe(TransportConstants.Incoming);
                 persisted.OwnerId.ShouldBe(theSettings.UniqueNodeId);
             }

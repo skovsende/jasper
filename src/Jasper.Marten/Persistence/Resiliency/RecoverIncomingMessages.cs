@@ -30,7 +30,7 @@ namespace Jasper.Marten.Persistence.Resiliency
             _schedulingAgent = schedulingAgent;
             _logger = logger;
 
-            _findAtLargeEnvelopesSql = $"select body from {marker.Incoming} where owner_id = {TransportConstants.AnyNode} take {settings.Retries.RecoveryBatchSize}";
+            _findAtLargeEnvelopesSql = $"select body from {marker.Incoming} where owner_id = {TransportConstants.AnyNode} and status = '{TransportConstants.Incoming}' limit {settings.Retries.RecoveryBatchSize}";
         }
 
         public async Task Execute(IDocumentSession session)

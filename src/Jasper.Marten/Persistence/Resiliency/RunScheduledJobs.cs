@@ -22,6 +22,7 @@ namespace Jasper.Marten.Persistence.Resiliency
         private readonly OwnershipMarker _marker;
         private readonly CompositeTransportLogger _logger;
         public static readonly int ScheduledJobLockId = "scheduled-jobs".GetHashCode();
+        private readonly string _markOwnedIncomingSql;
 
         public RunScheduledJobs(IWorkerQueue workers, IDocumentStore store, OwnershipMarker marker, CompositeTransportLogger logger)
         {
@@ -30,18 +31,19 @@ namespace Jasper.Marten.Persistence.Resiliency
             _marker = marker;
             _logger = logger;
 
-            _findReadyToExecuteJobs = $"select body from {marker.Incoming} where status = '{TransportConstants.Scheduled}' and execution_time >= :time";
+            _findReadyToExecuteJobs = $"select body from {marker.Incoming} where status = '{TransportConstants.Scheduled}' and execution_time <= :time";
+            _markOwnedIncomingSql = $"update {marker.Incoming} set owner_id = :owner, status = '{TransportConstants.Incoming}' where id = ANY(:idlist)";
 
         }
 
         public async Task Execute(IDocumentSession session)
         {
-            var utcNow = DateTime.UtcNow;
+            var utcNow = DateTimeOffset.UtcNow;;
 
             await ExecuteAtTime(session, utcNow);
         }
 
-        public async Task<List<Envelope>> ExecuteAtTime(IDocumentSession session, DateTime utcNow)
+        public async Task<List<Envelope>> ExecuteAtTime(IDocumentSession session, DateTimeOffset utcNow)
         {
             if (!await session.TryGetGlobalTxLock(ScheduledJobLockId))
             {
@@ -50,11 +52,19 @@ namespace Jasper.Marten.Persistence.Resiliency
 
             var readyToExecute = await session.Connection
                 .CreateCommand(_findReadyToExecuteJobs)
-                .With("time", DateTime.UtcNow, NpgsqlDbType.Timestamp)
+                .With("time", utcNow, NpgsqlDbType.TimestampTZ)
                 .ExecuteToEnvelopes();
 
             if (!readyToExecute.Any()) return readyToExecute;
 
+
+            var identities = readyToExecute.Select(x => x.Id).ToArray();
+
+            await session.Connection.CreateCommand()
+                .Sql(_markOwnedIncomingSql)
+                .With("idlist", identities, NpgsqlDbType.Array | NpgsqlDbType.Uuid)
+                .With("owner", _marker.CurrentNodeId, NpgsqlDbType.Integer)
+                .ExecuteNonQueryAsync();
 
             await _marker.MarkIncomingOwnedByThisNode(session, readyToExecute);
 

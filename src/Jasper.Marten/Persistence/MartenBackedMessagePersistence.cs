@@ -3,11 +3,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jasper.Bus.Logging;
 using Jasper.Bus.Runtime;
+using Jasper.Bus.Runtime.Serializers;
 using Jasper.Bus.Transports;
 using Jasper.Bus.Transports.Configuration;
 using Jasper.Bus.Transports.Receiving;
 using Jasper.Bus.Transports.Sending;
 using Jasper.Bus.WorkerQueues;
+using Jasper.Conneg;
 using Jasper.Marten.Persistence.Resiliency;
 using Marten;
 using Marten.Util;
@@ -20,13 +22,15 @@ namespace Jasper.Marten.Persistence
         private readonly CompositeTransportLogger _logger;
         private readonly BusSettings _settings;
         private readonly OwnershipMarker _marker;
+        private readonly SerializationGraph _serializers;
 
-        public MartenBackedMessagePersistence(IDocumentStore store, CompositeTransportLogger logger, BusSettings settings, OwnershipMarker marker)
+        public MartenBackedMessagePersistence(IDocumentStore store, CompositeTransportLogger logger, BusSettings settings, OwnershipMarker marker, BusMessageSerializationGraph serializers)
         {
             _store = store;
             _logger = logger;
             _settings = settings;
             _marker = marker;
+            _serializers = serializers;
         }
 
         public ISendingAgent BuildSendingAgent(Uri destination, ISender sender, CancellationToken cancellation)
@@ -36,7 +40,7 @@ namespace Jasper.Marten.Persistence
 
         public ISendingAgent BuildLocalAgent(Uri destination, IWorkerQueue queues)
         {
-            return new LocalSendingAgent(destination, queues, _store, _marker);
+            return new LocalSendingAgent(destination, queues, _store, _marker, _serializers);
         }
 
         public IListener BuildListener(IListeningAgent agent, IWorkerQueue queues)
@@ -58,9 +62,21 @@ namespace Jasper.Marten.Persistence
 
         public async Task ScheduleMessage(Envelope envelope)
         {
+            if (envelope.Message == null)
+            {
+                throw new ArgumentOutOfRangeException(nameof(envelope), "Envelope.Message is required");
+            }
+
             if (!envelope.ExecutionTime.HasValue)
             {
                 throw new ArgumentOutOfRangeException(nameof(envelope), "No value for ExecutionTime");
+            }
+
+            if (envelope.Data == null || envelope.Data.Length == 0)
+            {
+                var writer = _serializers.JsonWriterFor(envelope.Message.GetType());
+                envelope.Data = writer.Write(envelope.Message);
+                envelope.ContentType = writer.ContentType;
             }
 
             envelope.Status = TransportConstants.Scheduled;

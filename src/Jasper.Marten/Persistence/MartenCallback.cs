@@ -78,16 +78,19 @@ namespace Jasper.Marten.Persistence
             await _queue.Enqueue(envelope);
         }
 
-        public async Task MoveToDelayedUntil(DateTime time, Envelope envelope)
+        public async Task MoveToDelayedUntil(DateTimeOffset time, Envelope envelope)
         {
             envelope.ExecutionTime = time;
             envelope.Status = TransportConstants.Scheduled;
 
-            using (var session = _store.LightweightSession())
+            using (var conn = _store.Tenancy.Default.CreateConnection())
             {
-                session.StoreIncoming(_marker, envelope);
+                await conn.OpenAsync();
 
-                await session.SaveChangesAsync();
+                await conn.CreateCommand($"update {_marker.Incoming} set execution_time = :time, status = '{TransportConstants.Scheduled}' where id = :id")
+                    .With("time", envelope.ExecutionTime, NpgsqlDbType.TimestampTZ)
+                    .With("id", envelope.Id, NpgsqlDbType.Uuid)
+                    .ExecuteNonQueryAsync();
             }
         }
     }

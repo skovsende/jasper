@@ -11,7 +11,7 @@ namespace Jasper.Marten.Persistence
             AddPrimaryKey(new TableColumn("id", "uuid"));
             AddColumn("status", "varchar", "NOT NULL");
             AddColumn("owner_id", "int", "NOT NULL");
-            AddColumn("execution_time", "timestamp");
+            AddColumn("execution_time", "timestamptz");
             AddColumn("attempts", "int", "DEFAULT 0");
             AddColumn("body", "bytea", "NOT NULL");
         }

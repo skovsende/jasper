@@ -72,8 +72,8 @@ namespace Jasper.Testing.Bus.Runtime
 
             };
 
-            parent.OriginalId.ShouldBeNull();
-            parent.ParentId.ShouldBeNull();
+            parent.OriginalId.ShouldBe(Guid.Empty);
+            parent.ParentId.ShouldBe(Guid.Empty);
         }
 
         [Fact]
@@ -144,7 +144,7 @@ namespace Jasper.Testing.Bus.Runtime
 
             var child = parent.ForResponse(childMessage);
 
-            child.ResponseId.ShouldBeNull();
+            child.ResponseId.ShouldBe(Guid.Empty);
             child.Destination.ShouldBeNull();
         }
 
@@ -162,7 +162,7 @@ namespace Jasper.Testing.Bus.Runtime
             var childMessage = new Message1();
 
             var child = parent.ForResponse(childMessage);
-            child.ResponseId.ShouldBeNull();
+            child.ResponseId.ShouldBe(Guid.Empty);
             child.Destination.ShouldBeNull();
         }
 

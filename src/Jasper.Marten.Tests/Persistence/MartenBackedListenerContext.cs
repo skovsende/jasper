@@ -11,6 +11,7 @@ using Jasper.Bus.Transports.Receiving;
 using Jasper.Bus.Transports.Tcp;
 using Jasper.Bus.WorkerQueues;
 using Jasper.Marten.Persistence;
+using Jasper.Marten.Persistence.Resiliency;
 using Jasper.Marten.Tests.Setup;
 using Jasper.Util;
 using Marten;
@@ -91,7 +92,7 @@ namespace Jasper.Marten.Tests.Persistence
                 Substitute.For<IListeningAgent>(),
                 theWorkerQueue,
                 theStore,
-                CompositeTransportLogger.Empty(), theSettings);
+                CompositeTransportLogger.Empty(), theSettings, new OwnershipMarker(theSettings, new StoreOptions()));
         }
 
         public void Dispose()

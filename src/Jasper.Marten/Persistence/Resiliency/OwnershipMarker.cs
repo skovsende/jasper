@@ -1,10 +1,14 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Transports;
 using Jasper.Bus.Transports.Configuration;
+using Jasper.Internals.Codegen;
+using Jasper.Util;
 using Marten;
+using Marten.Schema;
 using Marten.Util;
 using NpgsqlTypes;
 
@@ -13,69 +17,95 @@ namespace Jasper.Marten.Persistence.Resiliency
     // TODO -- use Marten operations instead of direct SQL calls here to batch up commands
     public class OwnershipMarker
     {
-        private readonly string _reassignDormantNodeSql;
-        private readonly string _markOwnerAndStatusSql;
+
         private readonly int _currentNodeId;
-        private readonly string _markOwnedSql;
+        private readonly string _markOwnedOutgoingSql;
+        private readonly string _markOwnedIncomingSql;
+
+
+
+
+
 
         public OwnershipMarker(BusSettings settings, StoreOptions storeConfiguration)
         {
-            var dbObjectName = storeConfiguration.Storage.MappingFor(typeof(Envelope)).Table;
-            _markOwnerAndStatusSql = $"update {dbObjectName} set status = :status, owner_id = :owner where id = ANY(:idlist)";
-            _markOwnedSql = $"update {dbObjectName} set owner_id = :owner where id = ANY(:idlist)";
+            Incoming = new DbObjectName(storeConfiguration.DatabaseSchemaName,
+                PostgresqlEnvelopeStorage.IncomingTableName);
+            Outgoing = new DbObjectName(storeConfiguration.DatabaseSchemaName,
+                PostgresqlEnvelopeStorage.OutgoingTableName);
+
+
+            _markOwnedOutgoingSql = $"update {Outgoing} set owner_id = :owner where id = ANY(:idlist)";
+
+
+
+            _markOwnedIncomingSql = $"update {Incoming} set owner_id = :owner where id = ANY(:idlist)";
 
             _currentNodeId = settings.UniqueNodeId;
 
-            _reassignDormantNodeSql = $@"
-update {dbObjectName}
-  set owner_id = 0
-where
-  owner_id in (
-    select distinct owner_id from {dbObjectName}
-    where owner_id != 0 AND owner_id != {settings.UniqueNodeId} AND pg_try_advisory_xact_lock(owner_id)
-  )
-";
+
+
+
+
+
+
+
+
+
         }
 
-        public Task MarkIncomingOwnedByThisNode(IDocumentSession session, params Envelope[] envelopes)
-        {
-            return execute(session, _currentNodeId, TransportConstants.Incoming, envelopes);
-        }
+        public DbObjectName Incoming { get; }
 
-        public Task MarkOutgoingOwnedByThisNode(IDocumentSession session, params Envelope[] envelopes)
-        {
-            return execute(session, _currentNodeId, TransportConstants.Outgoing, envelopes);
-        }
+        public DbObjectName Outgoing { get; }
 
-        public Task MarkOwnedByAnyNode(IDocumentSession session, params Envelope[] envelopes)
+
+
+
+        // TODO -- make this be an operation
+        public Task MarkIncomingOwnedByThisNode(IDocumentSession session, List<Envelope> envelopes)
         {
             var identities = envelopes.Select(x => x.Id).ToArray();
 
             return session.Connection.CreateCommand()
-                .Sql(_markOwnedSql)
-                .With("idlist", identities, NpgsqlDbType.Array | NpgsqlDbType.Varchar)
+                .Sql(_markOwnedIncomingSql)
+                .With("idlist", identities, NpgsqlDbType.Array | NpgsqlDbType.Uuid)
+                .With("owner", _currentNodeId, NpgsqlDbType.Integer)
+                .ExecuteNonQueryAsync();
+        }
+
+        // TODO -- convert this to an operation
+        public Task MarkOutgoingOwnedByThisNode(IDocumentSession session, params Envelope[] envelopes)
+        {
+            var identities = envelopes.Select(x => x.Id).ToArray();
+
+            return session.Connection.CreateCommand()
+                .Sql(_markOwnedOutgoingSql)
+                .With("idlist", identities, NpgsqlDbType.Array | NpgsqlDbType.Uuid)
+                .With("status", TransportConstants.Outgoing, NpgsqlDbType.Varchar)
+                .With("owner", _currentNodeId, NpgsqlDbType.Integer)
+                .ExecuteNonQueryAsync();
+        }
+
+        // TODO -- convert to an operation
+        public Task MarkIncomingOwnedByAnyNode(IDocumentSession session, params Envelope[] envelopes)
+        {
+            var identities = envelopes.Select(x => x.Id).ToArray();
+
+            return session.Connection.CreateCommand()
+                .Sql(_markOwnedIncomingSql)
+                .With("idlist", identities, NpgsqlDbType.Array | NpgsqlDbType.Uuid)
                 .With("owner", TransportConstants.AnyNode, NpgsqlDbType.Integer)
                 .ExecuteNonQueryAsync();
         }
 
 
-        private Task execute(IDocumentSession session, int owner, string status, Envelope[] envelopes)
-        {
-            var identities = envelopes.Select(x => x.Id).ToArray();
 
-            return session.Connection.CreateCommand()
-                .Sql(_markOwnerAndStatusSql)
-                .With("idlist", identities, NpgsqlDbType.Array | NpgsqlDbType.Varchar)
-                .With("status", status, NpgsqlDbType.Varchar)
-                .With("owner", owner, NpgsqlDbType.Integer)
-                .ExecuteNonQueryAsync();
-        }
 
-        public Task ReassignEnvelopesFromDormantNodes(IDocumentSession session)
-        {
-            return session.Connection.CreateCommand()
-                .Sql(_reassignDormantNodeSql).ExecuteNonQueryAsync();
 
-        }
+
+
+
+
+
     }
 }

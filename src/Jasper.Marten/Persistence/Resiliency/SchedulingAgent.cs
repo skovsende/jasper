@@ -53,7 +53,7 @@ namespace Jasper.Marten.Persistence.Resiliency
             _incomingMessages = new RecoverIncomingMessages(_workers, _settings, marker, this, _logger);
             _outgoingMessages = new RecoverOutgoingMessages(_channels, _settings, marker, this, _logger);
 
-            _nodeReassignment = new ReassignFromDormantNodes(marker);
+            _nodeReassignment = new ReassignFromDormantNodes(marker, settings);
         }
 
         public void RescheduleOutgoingRecovery()

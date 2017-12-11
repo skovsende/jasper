@@ -72,7 +72,7 @@ namespace Jasper.Marten.Tests.Persistence.Resiliency
             var executed1 = executed.Single();
 
             executed1.Id.ShouldBe(env2.Id);
-            theWorkerQueue.Received().Enqueue(executed1);
+            await theWorkerQueue.Received().Enqueue(executed1);
 
             using (var session = theStore.QuerySession())
             {

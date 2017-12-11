@@ -10,6 +10,7 @@ using Jasper.Bus.Transports.Sending;
 using Jasper.Bus.WorkerQueues;
 using Jasper.Marten.Persistence.Resiliency;
 using Marten;
+using Marten.Util;
 
 namespace Jasper.Marten.Persistence
 {
@@ -35,17 +36,24 @@ namespace Jasper.Marten.Persistence
 
         public ISendingAgent BuildLocalAgent(Uri destination, IWorkerQueue queues)
         {
-            return new LocalSendingAgent(destination, queues, _store);
+            return new LocalSendingAgent(destination, queues, _store, _marker);
         }
 
         public IListener BuildListener(IListeningAgent agent, IWorkerQueue queues)
         {
-            return new MartenBackedListener(agent, queues, _store, _logger, _settings);
+            return new MartenBackedListener(agent, queues, _store, _logger, _settings, _marker);
         }
 
         public void ClearAllStoredMessages()
         {
-            _store.Advanced.Clean.DeleteDocumentsFor(typeof(Envelope));
+            using (var conn = _store.Tenancy.Default.CreateConnection())
+            {
+                conn.Open();
+
+                conn.CreateCommand().Sql($"delete from {_marker.Incoming};delete from {_marker.Outgoing}")
+                    .ExecuteNonQuery();
+
+            }
         }
 
         public async Task ScheduleMessage(Envelope envelope)
@@ -59,7 +67,7 @@ namespace Jasper.Marten.Persistence
             envelope.OwnerId = TransportConstants.AnyNode;
             using (var session = _store.LightweightSession())
             {
-                session.Store(envelope);
+                session.StoreIncoming(_marker, envelope);
                 await session.SaveChangesAsync();
             }
         }

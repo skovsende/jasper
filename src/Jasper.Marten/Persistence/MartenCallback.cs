@@ -3,7 +3,10 @@ using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Transports;
 using Jasper.Bus.WorkerQueues;
+using Jasper.Marten.Persistence.Resiliency;
 using Marten;
+using Marten.Util;
+using NpgsqlTypes;
 
 namespace Jasper.Marten.Persistence
 {
@@ -12,30 +15,41 @@ namespace Jasper.Marten.Persistence
         private readonly Envelope _envelope;
         private readonly IWorkerQueue _queue;
         private readonly IDocumentStore _store;
+        private readonly OwnershipMarker _marker;
 
-        public MartenCallback(Envelope envelope, IWorkerQueue queue, IDocumentStore store)
+        public MartenCallback(Envelope envelope, IWorkerQueue queue, IDocumentStore store, OwnershipMarker marker)
         {
             _envelope = envelope;
             _queue = queue;
             _store = store;
+            _marker = marker;
         }
 
         public async Task MarkComplete()
         {
             // TODO -- later, come back and do retries?
-            using (var session = _store.LightweightSession())
+
+            using (var conn = _store.Tenancy.Default.CreateConnection())
             {
-                session.Delete(_envelope);
-                await session.SaveChangesAsync();
+                await conn.OpenAsync();
+
+                await conn.CreateCommand($"delete from {_marker.Incoming} where id = :id")
+                    .With("id", _envelope.Id, NpgsqlDbType.Uuid)
+                    .ExecuteNonQueryAsync();
             }
         }
 
         public async Task MoveToErrors(Envelope envelope, Exception exception)
         {
             // TODO -- later, come back and do retries?
+
+
             using (var session = _store.LightweightSession())
             {
-                session.Delete(_envelope);
+                var connection = session.Connection;
+                await connection.CreateCommand($"delete from {_marker.Incoming} where id = :id")
+                    .With("id", envelope.Id, NpgsqlDbType.Uuid)
+                    .ExecuteNonQueryAsync();
 
                 var report = new ErrorReport(envelope, exception);
                 session.Store(report);
@@ -49,13 +63,16 @@ namespace Jasper.Marten.Persistence
 
         public async Task Requeue(Envelope envelope)
         {
-            // TODO -- Optimize by incrementing instead w/ sql
-            using (var session = _store.LightweightSession())
-            {
-                envelope.Attempts++;
-                session.Store(envelope);
+            envelope.Attempts++;
 
-                await session.SaveChangesAsync();
+            using (var conn = _store.Tenancy.Default.CreateConnection())
+            {
+                await conn.OpenAsync();
+
+                await conn.CreateCommand($"update {_marker.Incoming} set attempts = :attempts where id = :id")
+                    .With("attempts", envelope.Attempts, NpgsqlDbType.Integer)
+                    .With("id", envelope.Id, NpgsqlDbType.Uuid)
+                    .ExecuteNonQueryAsync();
             }
 
             await _queue.Enqueue(envelope);
@@ -68,7 +85,8 @@ namespace Jasper.Marten.Persistence
 
             using (var session = _store.LightweightSession())
             {
-                session.Store(envelope);
+                session.StoreIncoming(_marker, envelope);
+
                 await session.SaveChangesAsync();
             }
         }

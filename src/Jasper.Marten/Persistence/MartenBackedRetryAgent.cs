@@ -11,6 +11,8 @@ using Jasper.Bus.Transports.Sending;
 using Jasper.Bus.Transports.Tcp;
 using Jasper.Marten.Persistence.Resiliency;
 using Marten;
+using Marten.Util;
+using NpgsqlTypes;
 
 namespace Jasper.Marten.Persistence
 {
@@ -18,11 +20,14 @@ namespace Jasper.Marten.Persistence
     {
         private readonly IDocumentStore _store;
         private readonly OwnershipMarker _marker;
+        private string _deleteIncoming;
 
         public MartenBackedRetryAgent(IDocumentStore store, ISender sender, RetrySettings settings, OwnershipMarker marker) : base(sender, settings)
         {
             _store = store;
             _marker = marker;
+
+            _deleteIncoming = $"delete from {_marker.Incoming} where id = ANY(:idlist)";
         }
 
         // TODO -- add logging for envelopes discarded
@@ -49,7 +54,7 @@ namespace Jasper.Marten.Persistence
                     if (all.Count > _settings.MaximumEnvelopeRetryStorage)
                     {
                         var reassigned = all.Skip(_settings.MaximumEnvelopeRetryStorage).ToArray();
-                        await _marker.MarkOwnedByAnyNode(session, reassigned);
+                        await _marker.MarkIncomingOwnedByAnyNode(session, reassigned);
                     }
 
                     await session.SaveChangesAsync();
@@ -74,14 +79,13 @@ namespace Jasper.Marten.Persistence
             var expired = Queued.Where(x => x.IsExpired());
             if (expired.Any())
             {
-                using (var session = _store.LightweightSession())
+                using (var conn = _store.Tenancy.Default.CreateConnection())
                 {
-                    foreach (var envelope in expired)
-                    {
-                        session.Delete(envelope);
-                    }
+                    conn.Open();
 
-                    session.SaveChanges();
+                    conn.CreateCommand(_deleteIncoming)
+                        .With("idlist", expired.Select(x => x.Id).ToArray(), NpgsqlDbType.Array | NpgsqlDbType.Uuid)
+                        .ExecuteNonQuery();
                 }
             }
 

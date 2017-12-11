@@ -8,6 +8,7 @@ using Jasper.Bus.Transports.Configuration;
 using Jasper.Bus.Transports.Receiving;
 using Jasper.Bus.Transports.Tcp;
 using Jasper.Bus.WorkerQueues;
+using Jasper.Marten.Persistence.Resiliency;
 using Marten;
 
 namespace Jasper.Marten.Persistence
@@ -19,14 +20,16 @@ namespace Jasper.Marten.Persistence
         private readonly IDocumentStore _store;
         private readonly CompositeTransportLogger _logger;
         private readonly BusSettings _settings;
+        private readonly OwnershipMarker _marker;
 
-        public MartenBackedListener(IListeningAgent agent, IWorkerQueue queues, IDocumentStore store, CompositeTransportLogger logger, BusSettings settings)
+        public MartenBackedListener(IListeningAgent agent, IWorkerQueue queues, IDocumentStore store, CompositeTransportLogger logger, BusSettings settings, OwnershipMarker marker)
         {
             _agent = agent;
             _queues = queues;
             _store = store;
             _logger = logger;
             _settings = settings;
+            _marker = marker;
         }
 
         public Uri Address => _agent.Address;
@@ -65,7 +68,7 @@ namespace Jasper.Marten.Persistence
 
                 using (var session = _store.LightweightSession())
                 {
-                    session.Store(messages);
+                    session.StoreIncoming(_marker, messages);
                     await session.SaveChangesAsync();
                 }
 
@@ -75,7 +78,7 @@ namespace Jasper.Marten.Persistence
 
                 foreach (var message in messages.Where(x => x.Status == TransportConstants.Incoming))
                 {
-                    message.Callback = new MartenCallback(message, _queues, _store);
+                    message.Callback = new MartenCallback(message, _queues, _store, _marker);
                     await _queues.Enqueue(message);
                 }
 

@@ -236,10 +236,8 @@ namespace Jasper.Bus.Runtime
             set => _executionTime = value?.ToUniversalTime();
         }
 
-        [Obsolete("Eliminate w/ GH-264")]
         public string Status { get; set; }
 
-        [Obsolete("Eliminate w/ GH-264")]
         public int OwnerId { get; set; } = 0;
 
         public bool IsDelayed(DateTime utcNow)

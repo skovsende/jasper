@@ -11,7 +11,10 @@ using Jasper.Bus.Transports.Sending;
 using Jasper.Bus.Transports.Tcp;
 using Jasper.Marten.Persistence.Resiliency;
 using Marten;
+using Marten.Util;
+using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis.VisualBasic;
+using NpgsqlTypes;
 
 namespace Jasper.Marten.Persistence
 {
@@ -20,6 +23,7 @@ namespace Jasper.Marten.Persistence
         private readonly CancellationToken _cancellation;
         private readonly IDocumentStore _store;
         private readonly BusSettings _settings;
+        private readonly OwnershipMarker _marker;
 
         public MartenBackedSendingAgent(Uri destination, IDocumentStore store, ISender sender, CancellationToken cancellation, CompositeTransportLogger logger, BusSettings settings, OwnershipMarker marker)
             : base(destination, sender, logger, settings, new MartenBackedRetryAgent(store, sender, settings.Retries, marker))
@@ -27,6 +31,7 @@ namespace Jasper.Marten.Persistence
             _cancellation = cancellation;
             _store = store;
             _settings = settings;
+            _marker = marker;
         }
 
         public override Task EnqueueOutgoing(Envelope envelope)
@@ -49,7 +54,8 @@ namespace Jasper.Marten.Persistence
 
             using (var session = _store.LightweightSession())
             {
-                session.Store(envelope);
+                var operation = new StoreOutgoingEnvelope(_marker.Outgoing, envelope, _settings.UniqueNodeId);
+                session.QueueOperation(operation);
                 await session.SaveChangesAsync(_cancellation);
             }
 
@@ -65,7 +71,12 @@ namespace Jasper.Marten.Persistence
 
             using (var session = _store.LightweightSession())
             {
-                session.Store(envelopes.ToArray());
+                foreach (var envelope in envelopes)
+                {
+                    var operation = new StoreOutgoingEnvelope(_marker.Outgoing, envelope, _settings.UniqueNodeId);
+                    session.QueueOperation(operation);
+                }
+
                 await session.SaveChangesAsync(_cancellation);
             }
 
@@ -78,14 +89,14 @@ namespace Jasper.Marten.Persistence
         public override async Task Successful(OutgoingMessageBatch outgoing)
         {
             // TODO -- retries?
-            using (var session = _store.LightweightSession())
+            using (var conn = _store.Tenancy.Default.CreateConnection())
             {
-                foreach (var message in outgoing.Messages)
-                {
-                    session.Delete(message);
-                }
+                await conn.OpenAsync(_cancellation);
 
-                await session.SaveChangesAsync(_cancellation);
+                await conn.CreateCommand($"delete from {_marker.Outgoing} where id = ANY(;idlist)")
+                    .With("idlist", outgoing.Messages.Select(x => x.Id).ToArray(),
+                        NpgsqlDbType.Array | NpgsqlDbType.Uuid)
+                    .ExecuteNonQueryAsync(_cancellation);
             }
         }
     }

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Transports.Sending;
 using Jasper.Bus.WorkerQueues;
+using Jasper.Marten.Persistence.Resiliency;
 using Marten;
 
 namespace Jasper.Marten.Persistence
@@ -12,12 +13,14 @@ namespace Jasper.Marten.Persistence
     {
         private readonly IWorkerQueue _queues;
         private readonly IDocumentStore _store;
+        private readonly OwnershipMarker _marker;
         public Uri Destination { get; }
 
-        public LocalSendingAgent(Uri destination, IWorkerQueue queues, IDocumentStore store)
+        public LocalSendingAgent(Uri destination, IWorkerQueue queues, IDocumentStore store, OwnershipMarker marker)
         {
             _queues = queues;
             _store = store;
+            _marker = marker;
             Destination = destination;
         }
 
@@ -32,7 +35,7 @@ namespace Jasper.Marten.Persistence
 
         public Task EnqueueOutgoing(Envelope envelope)
         {
-            envelope.Callback = new MartenCallback(envelope, _queues, _store);
+            envelope.Callback = new MartenCallback(envelope, _queues, _store, _marker);
 
             return _queues.Enqueue(envelope);
         }

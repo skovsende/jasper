@@ -10,6 +10,8 @@ using Jasper.Bus.Transports;
 using Jasper.Bus.Transports.Configuration;
 using Jasper.Util;
 using Marten;
+using Marten.Util;
+using NpgsqlTypes;
 
 namespace Jasper.Marten.Persistence.Resiliency
 {
@@ -21,6 +23,9 @@ namespace Jasper.Marten.Persistence.Resiliency
         private readonly ISchedulingAgent _schedulingAgent;
         private readonly CompositeTransportLogger _logger;
         private readonly BusSettings _settings;
+        private readonly string _findUniqueDestinations;
+        private readonly string _findOutgoingEnvelopesSql;
+        private readonly string _deleteOutgoingSql;
 
         public RecoverOutgoingMessages(IChannelGraph channels, BusSettings settings, OwnershipMarker marker, ISchedulingAgent schedulingAgent, CompositeTransportLogger logger)
         {
@@ -29,6 +34,26 @@ namespace Jasper.Marten.Persistence.Resiliency
             _marker = marker;
             _schedulingAgent = schedulingAgent;
             _logger = logger;
+
+            _findUniqueDestinations = $"select distinct destination from {_marker.Outgoing}";
+            _findOutgoingEnvelopesSql = $"select body from {marker.Outgoing} where owner_id = {TransportConstants.AnyNode} and destination = :destination take {settings.Retries.RecoveryBatchSize}";
+            _deleteOutgoingSql = $"delete from {marker.Outgoing} where owner_id = :owner and destination = :destination";
+
+
+        }
+
+        public async Task<List<Uri>> FindAllOutgoingDestinations(IDocumentSession session)
+        {
+            var list = new List<Uri>();
+
+            var cmd = session.Connection.CreateCommand(_findUniqueDestinations);
+            using (var reader = await cmd.ExecuteReaderAsync())
+            {
+                var text = await reader.GetFieldValueAsync<string>(0);
+                list.Add(text.ToUri());
+            }
+
+            return list;
         }
 
         public async Task Execute(IDocumentSession session)
@@ -37,13 +62,10 @@ namespace Jasper.Marten.Persistence.Resiliency
                 return;
 
 
-            // TODO -- turn this into a compiled query if it's usable
-            var destinations = await session.Query<Envelope>().Where(x =>
-                    x.Status == TransportConstants.Outgoing && x.OwnerId == TransportConstants.AnyNode)
-                .Select(x => x.Address).Distinct().ToListAsync();
+            var destinations = await FindAllOutgoingDestinations(session);
 
             var count = 0;
-            foreach (var destination in destinations.Select(x => x.ToUri()))
+            foreach (var destination in destinations)
             {
                 count += await recoverFrom(destination, session);
             }
@@ -64,11 +86,9 @@ namespace Jasper.Marten.Persistence.Resiliency
 
                 if (channel.Latched) return 0;
 
-                var outgoing = (await session.QueryAsync(new FindOutgoingEnvelopesByDestination
-                {
-                    PageSize = _settings.Retries.RecoveryBatchSize,
-                    Address = destination.ToString()
-                }));
+                var outgoing = await session.Connection.CreateCommand(_findOutgoingEnvelopesSql)
+                    .With("destination", destination.ToString(), NpgsqlDbType.Varchar)
+                    .ExecuteToEnvelopes();
 
                 var filtered = filterExpired(session, outgoing);
 
@@ -96,11 +116,18 @@ namespace Jasper.Marten.Persistence.Resiliency
             {
                 _logger.LogException(e, message: $"Could not resolve a channel for {destination}");
 
-                session.DeleteWhere<Envelope>(x => x.Status == TransportConstants.Outgoing && x.Address == destination.ToString() && x.OwnerId == TransportConstants.AnyNode);
+                await DeleteFromOutgoingEnvelopes(session, TransportConstants.AnyNode, destination);
                 await session.SaveChangesAsync();
 
                 return 0;
             }
+        }
+
+        public Task DeleteFromOutgoingEnvelopes(IDocumentSession session, int ownerId, Uri destination)
+        {
+            return session.Connection.CreateCommand(_deleteOutgoingSql)
+                .With("destination", destination.ToString(), NpgsqlDbType.Varchar)
+                .With("owner", ownerId, NpgsqlDbType.Integer).ExecuteNonQueryAsync();
         }
 
 

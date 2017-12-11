@@ -2,8 +2,10 @@
 using System.Threading.Tasks;
 using Jasper.Bus.Runtime;
 using Jasper.Bus.Transports;
+using Jasper.Bus.Transports.Configuration;
 using Jasper.Bus.WorkerQueues;
 using Jasper.Marten.Persistence;
+using Jasper.Marten.Persistence.Resiliency;
 using Jasper.Marten.Tests.Setup;
 using Jasper.Testing.Bus;
 using Marten;
@@ -35,7 +37,7 @@ namespace Jasper.Marten.Tests.Persistence
 
             theStore.BulkInsert(new Envelope[]{theEnvelope});
 
-            theCallback = new MartenCallback(theEnvelope, Substitute.For<IWorkerQueue>(), theStore);
+            theCallback = new MartenCallback(theEnvelope, Substitute.For<IWorkerQueue>(), theStore, new OwnershipMarker(new BusSettings(), new StoreOptions()));
         }
 
         public void Dispose()

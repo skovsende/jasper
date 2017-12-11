@@ -9,12 +9,14 @@ using Jasper.Bus.Transports;
 using Jasper.Bus.WorkerQueues;
 using Marten;
 using Marten.Linq;
+using Marten.Util;
+using NpgsqlTypes;
 
 namespace Jasper.Marten.Persistence.Resiliency
 {
     public class RunScheduledJobs : IMessagingAction
     {
-
+        private readonly string _findReadyToExecuteJobs;
         private readonly IWorkerQueue _workers;
         private readonly IDocumentStore _store;
         private readonly OwnershipMarker _marker;
@@ -27,6 +29,9 @@ namespace Jasper.Marten.Persistence.Resiliency
             _store = store;
             _marker = marker;
             _logger = logger;
+
+            _findReadyToExecuteJobs = $"select body from {marker.Incoming} where status = '{TransportConstants.Scheduled}' and execution_time >= :time";
+
         }
 
         public async Task Execute(IDocumentSession session)
@@ -36,14 +41,17 @@ namespace Jasper.Marten.Persistence.Resiliency
             await ExecuteAtTime(session, utcNow);
         }
 
-        public async Task<Envelope[]> ExecuteAtTime(IDocumentSession session, DateTime utcNow)
+        public async Task<List<Envelope>> ExecuteAtTime(IDocumentSession session, DateTime utcNow)
         {
             if (!await session.TryGetGlobalTxLock(ScheduledJobLockId))
             {
                 return null;
             }
 
-            var readyToExecute = (await session.QueryAsync(new FindScheduledJobsReadyToGo(utcNow))).ToArray();
+            var readyToExecute = await session.Connection
+                .CreateCommand(_findReadyToExecuteJobs)
+                .With("time", DateTime.UtcNow, NpgsqlDbType.Timestamp)
+                .ExecuteToEnvelopes();
 
             if (!readyToExecute.Any()) return readyToExecute;
 
@@ -56,7 +64,7 @@ namespace Jasper.Marten.Persistence.Resiliency
 
             foreach (var envelope in readyToExecute)
             {
-                envelope.Callback = new MartenCallback(envelope, _workers, _store);
+                envelope.Callback = new MartenCallback(envelope, _workers, _store, _marker);
 
                 await _workers.Enqueue(envelope);
             }
@@ -65,24 +73,5 @@ namespace Jasper.Marten.Persistence.Resiliency
         }
     }
 
-    public class FindScheduledJobsReadyToGo : ICompiledListQuery<Envelope>
-    {
-        public DateTime CurrentTime { get; set; }
-        public string Status { get; set; } = TransportConstants.Scheduled;
 
-        public FindScheduledJobsReadyToGo()
-        {
-        }
-
-        public FindScheduledJobsReadyToGo(DateTime currentTime)
-        {
-            CurrentTime = currentTime;
-        }
-
-        public Expression<Func<IQueryable<Envelope>, IEnumerable<Envelope>>> QueryIs()
-        {
-            return q => q
-                .Where(x => x.Status == Status && x.ExecutionTime <= CurrentTime);
-        }
-    }
 }

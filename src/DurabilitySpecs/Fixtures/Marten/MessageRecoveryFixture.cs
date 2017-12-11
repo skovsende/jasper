@@ -77,6 +77,8 @@ namespace DurabilitySpecs.Fixtures.Marten
 
             });
 
+            _marker = _runtime.Get<OwnershipMarker>();
+
             theStore = _runtime.Get<IDocumentStore>();
             theStore.Advanced.Clean.DeleteAllDocuments();
 
@@ -163,6 +165,27 @@ namespace DurabilitySpecs.Fixtures.Marten
 
         private IReadOnlyList<Envelope> persistedEnvelopes(int ownerId)
         {
+            var list = new List<Envelope>();
+
+            using (var conn = theStore.Tenancy.Default.CreateConnection())
+            {
+                conn.Open();
+
+                var cmd = conn.CreateCommand($"select body from {_marker.Incoming} where owner_id = :owner")
+                    .With("owner", ownerId);
+
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        var envelope = Envelope.Read(reader.GetFieldValue<byte[]>(0));
+                        list.Add(envelope);
+                    }
+                }
+
+                return list;
+            }
+
             using (var session = theStore.QuerySession())
             {
                 return session.Query<Envelope>().Where(x => x.OwnerId == ownerId).ToList();
@@ -192,6 +215,7 @@ namespace DurabilitySpecs.Fixtures.Marten
 
         private readonly IList<NodeLocker> _nodeLockers = new List<NodeLocker>();
         private RecordingSchedulingAgent _schedulerAgent;
+        private OwnershipMarker _marker;
 
         [FormatAs("Node {node} is active")]
         public void NodeIsActive([SelectionList("owners")]string node)

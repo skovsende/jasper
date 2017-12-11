@@ -92,6 +92,12 @@ namespace Jasper.Marten.Persistence
             session.QueueOperation(operation);
         }
 
+        public static void StoreOutgoing(this IDocumentSession session, OwnershipMarker marker, Envelope envelope, int ownerId)
+        {
+            var operation = new StoreOutgoingEnvelope(marker.Outgoing, envelope, ownerId);
+            session.QueueOperation(operation);
+        }
+
         public static void StoreIncoming(this IDocumentSession session, OwnershipMarker marker, Envelope[] messages)
         {
             foreach (var envelope in messages)

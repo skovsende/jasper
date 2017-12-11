@@ -26,6 +26,7 @@ namespace Jasper.Marten.Persistence.Resiliency
         private readonly string _findUniqueDestinations;
         private readonly string _findOutgoingEnvelopesSql;
         private readonly string _deleteOutgoingSql;
+        private string _deleteById;
 
         public RecoverOutgoingMessages(IChannelGraph channels, BusSettings settings, OwnershipMarker marker, ISchedulingAgent schedulingAgent, CompositeTransportLogger logger)
         {
@@ -38,6 +39,7 @@ namespace Jasper.Marten.Persistence.Resiliency
             _findUniqueDestinations = $"select distinct destination from {_marker.Outgoing}";
             _findOutgoingEnvelopesSql = $"select body from {marker.Outgoing} where owner_id = {TransportConstants.AnyNode} and destination = :destination limit {settings.Retries.RecoveryBatchSize}";
             _deleteOutgoingSql = $"delete from {marker.Outgoing} where owner_id = :owner and destination = :destination";
+            _deleteById = $"delete from {marker.Outgoing} where id = ANY(:idlist)";
 
 
         }
@@ -93,7 +95,7 @@ namespace Jasper.Marten.Persistence.Resiliency
                     .With("destination", destination.ToString(), NpgsqlDbType.Varchar)
                     .ExecuteToEnvelopes();
 
-                var filtered = filterExpired(session, outgoing);
+                var filtered = await filterExpired(session, outgoing);
 
                 // Might easily try to do this in the time between starting
                 // and having the data fetched. Was able to make that happen in
@@ -134,15 +136,15 @@ namespace Jasper.Marten.Persistence.Resiliency
         }
 
 
-        private Envelope[] filterExpired(IDocumentSession session, IEnumerable<Envelope> outgoing)
+        // TODO -- move this to an Operation
+        private async Task<Envelope[]> filterExpired(IDocumentSession session, IEnumerable<Envelope> outgoing)
         {
             var expiredMessages = outgoing.Where(x => x.IsExpired()).ToArray();
             _logger.DiscardedExpired(expiredMessages);
 
-            foreach (var expired in expiredMessages)
-            {
-                session.Delete(expired);
-            }
+            await session.Connection.CreateCommand(_deleteById)
+                .With("idlist", expiredMessages.Select(x => x.Id).ToArray(), NpgsqlDbType.Array | NpgsqlDbType.Uuid)
+                .ExecuteNonQueryAsync();
 
             return outgoing.Where(x => !x.IsExpired()).ToArray();
         }

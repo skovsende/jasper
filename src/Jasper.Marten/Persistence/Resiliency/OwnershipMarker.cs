@@ -34,21 +34,9 @@ namespace Jasper.Marten.Persistence.Resiliency
 
 
             _markOwnedOutgoingSql = $"update {Outgoing} set owner_id = :owner where id = ANY(:idlist)";
-
-
-
             _markOwnedIncomingSql = $"update {Incoming} set owner_id = :owner where id = ANY(:idlist)";
 
             CurrentNodeId = settings.UniqueNodeId;
-
-
-
-
-
-
-
-
-
 
         }
 
